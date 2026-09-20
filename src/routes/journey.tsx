@@ -96,6 +96,8 @@ function JourneyPage() {
     return aggregateByDay(filtered);
   }, [filtered, moments, scale, kind]);
 
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   // Default active index: choose 2017 or a dense month
   const defaultIndex = useMemo(() => {
     if (!points.length) return 0;
@@ -118,6 +120,7 @@ function JourneyPage() {
   }, [periodParam, points]);
 
   const activePoint = points[Math.min(activeIndex, Math.max(points.length - 1, 0))];
+  const currentInspectPoint = (hoveredIndex !== null && points[hoveredIndex]) ? points[hoveredIndex] : activePoint;
 
   // Calculate real period summary & factual narrative using true aggregate counts
   const periodSummary = useMemo(() => {
@@ -153,6 +156,7 @@ function JourneyPage() {
                   onClick={() => {
                     setScale(item);
                     setActiveIndex(0);
+                    setHoveredIndex(null);
                   }}
                   className="capitalize font-mono text-xs"
                 >
@@ -175,6 +179,7 @@ function JourneyPage() {
                   onClick={() => {
                     setKind(item);
                     setActiveIndex(0);
+                    setHoveredIndex(null);
                   }}
                   className="capitalize font-mono text-xs"
                 >
@@ -187,25 +192,67 @@ function JourneyPage() {
 
         {/* Temporal Cluster Exploration */}
         {points.length > 0 ? (
-          <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_360px]">
-            <div>
+          <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 max-w-full">
               <div className="flex items-center justify-between">
                 <SectionLabel>Select a temporal passage</SectionLabel>
                 <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                  {points.length} periods mapped
+                  {points.length} periods mapped · hover bar for details
                 </span>
+              </div>
+
+              {/* Dynamic Live Inspector HUD */}
+              <div className="mt-3 mb-2 flex flex-wrap items-center justify-between gap-3 border border-border bg-card/85 px-4 py-2.5 font-mono text-xs shadow-xs transition-colors">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{
+                      backgroundColor:
+                        currentInspectPoint && currentInspectPoint.transactions > 0
+                          ? "var(--ochre)"
+                          : "var(--dusty-blue)",
+                    }}
+                  />
+                  <span className="font-semibold text-foreground text-sm">
+                    {currentInspectPoint?.label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    ({currentInspectPoint?.count.toLocaleString()} total traces)
+                  </span>
+                  {hoveredIndex !== null && hoveredIndex !== activeIndex ? (
+                    <span className="rounded bg-muted px-2 py-0.5 text-[9px] text-muted-foreground uppercase tracking-wider">
+                      Hover Preview · Click to select
+                    </span>
+                  ) : (
+                    <span className="rounded bg-foreground/10 px-2 py-0.5 text-[9px] text-foreground uppercase tracking-wider font-medium">
+                      Selected Passage
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 text-xs font-mono">
+                  <span className="flex items-center gap-1.5 text-dusty-blue font-medium">
+                    <Music2 className="size-3.5" />
+                    <span>{currentInspectPoint?.music.toLocaleString()} music</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-ochre font-medium">
+                    <ReceiptText className="size-3.5" />
+                    <span>{currentInspectPoint?.transactions.toLocaleString()} receipts</span>
+                  </span>
+                </div>
               </div>
 
               {/* Scrollable Bar Cluster */}
               <div
-                className="flex h-[380px] items-end gap-1 overflow-x-auto border-b border-border px-2 pb-2"
+                className="flex h-[390px] items-end gap-1 overflow-x-auto border-b border-border px-2 pt-16 pb-2"
                 role="listbox"
                 aria-label="Temporal activity clusters"
               >
                 {points.map((point, index) => {
                   const isSelected = index === activeIndex;
+                  const isHovered = index === hoveredIndex;
                   const hasTx = point.transactions > 0;
-                  const heightPercent = Math.max(10, (point.count / maxCount) * 88);
+                  const heightPercent = Math.max(10, (point.count / maxCount) * 82);
 
                   return (
                     <button
@@ -213,12 +260,45 @@ function JourneyPage() {
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => setActiveIndex(index)}
+                      onMouseEnter={() => setHoveredIndex(index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      onFocus={() => setHoveredIndex(index)}
+                      onBlur={() => setHoveredIndex(null)}
                       className="group relative flex h-full min-w-7 flex-1 items-end justify-center focus-visible:outline-2 focus-visible:outline-ring"
+                      title={`${point.label}: ${point.count.toLocaleString()} traces (${point.music.toLocaleString()} music, ${point.transactions.toLocaleString()} receipts)`}
                     >
+                      {/* Floating tooltip on hover */}
+                      <div
+                        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-150 ${
+                          isHovered
+                            ? "flex flex-col items-center opacity-100"
+                            : "hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100"
+                        }`}
+                        style={{ bottom: `calc(${heightPercent}% + 8px)` }}
+                      >
+                        <div className="rounded border border-foreground bg-popover px-2.5 py-1.5 shadow-paper text-left whitespace-nowrap min-w-[110px]">
+                          <div className="font-mono text-[10px] font-bold text-foreground">
+                            {point.label}
+                          </div>
+                          <div className="font-mono text-[10px] text-foreground/85 mt-0.5">
+                            {point.count.toLocaleString()} total
+                          </div>
+                          <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] border-t border-border pt-1">
+                            <span className="text-dusty-blue font-medium">{point.music.toLocaleString()} m</span>
+                            <span className="text-ochre font-medium">{point.transactions.toLocaleString()} tx</span>
+                          </div>
+                        </div>
+                        <div className="size-1.5 -mt-1 rotate-45 border-b border-r border-foreground bg-popover" />
+                      </div>
+
                       <div
                         className={`w-full max-w-8 transition-all ${
                           isSelected
-                            ? "bg-foreground"
+                            ? "bg-foreground ring-2 ring-foreground/40"
+                            : isHovered
+                            ? hasTx
+                              ? "bg-ochre brightness-110 ring-1 ring-ochre"
+                              : "bg-dusty-blue brightness-110 ring-1 ring-dusty-blue"
                             : hasTx
                             ? "bg-ochre/70 group-hover:bg-ochre"
                             : "bg-dusty-blue/50 group-hover:bg-dusty-blue"
@@ -226,7 +306,7 @@ function JourneyPage() {
                         style={{ height: `${heightPercent}%` }}
                       />
                       <span className="sr-only">
-                        {point.label}, {point.count.toLocaleString()} traces
+                        {point.label}, {point.count.toLocaleString()} traces ({point.music.toLocaleString()} music, {point.transactions.toLocaleString()} receipts)
                       </span>
                     </button>
                   );
@@ -240,16 +320,18 @@ function JourneyPage() {
                 <span>{points[points.length - 1]?.label}</span>
               </div>
 
-              {/* Factual Contextual Narrative */}
+              {/* Factual Contextual Narrative - Responsive wrapped text */}
               {periodSummary && (
-                <div className="mt-10 border-t border-border pt-8">
+                <div className="mt-10 border-t border-border pt-8 max-w-full lg:max-w-3xl">
                   <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
                     Contextual Archival Narrative
                   </div>
-                  <p className="mt-4 font-display text-2xl leading-relaxed text-foreground md:text-3xl">
-                    "{periodSummary.narrative}"
-                  </p>
-                  <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+                  <blockquote className="mt-4 border-l-2 border-foreground/30 pl-4 py-1">
+                    <p className="font-display text-lg sm:text-xl md:text-2xl leading-relaxed text-foreground break-words whitespace-normal">
+                      "{periodSummary.narrative}"
+                    </p>
+                  </blockquote>
+                  <p className="mt-3 font-mono text-[10px] text-muted-foreground">
                     Derived strictly from observable record tallies. No personal or causal assumptions made.
                   </p>
                 </div>
