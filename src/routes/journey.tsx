@@ -1,0 +1,24 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { Music2, ReceiptText } from "lucide-react";
+import { LifeTraceShell, PageIntro, SectionLabel } from "@/components/lifetrace-shell";
+import { Button } from "@/components/ui/button";
+import { aggregateByDay, aggregateByHour, aggregateByMonth, byKind } from "@/lib/lifetrace-analysis";
+import { lifeMoments, type MomentKind } from "@/lib/lifetrace-data";
+
+export const Route = createFileRoute("/journey")({ head: () => ({ meta: [{ title: "Journey — LIFE//TRACE" }, { name: "description", content: "Move through a digital life by year, month, and day." }, { property: "og:title", content: "Journey — LIFE//TRACE" }, { property: "og:description", content: "An interactive temporal passage through listening and transaction traces." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: JourneyPage });
+
+function JourneyPage() {
+  const [scale, setScale] = useState<"year" | "month" | "day">("year");
+  const [kind, setKind] = useState<MomentKind | "all">("all");
+  const filtered = useMemo(() => byKind(lifeMoments, kind), [kind]);
+  const points = useMemo(() => scale === "year" ? aggregateByMonth(filtered) : scale === "month" ? aggregateByDay(filtered) : aggregateByHour(filtered), [filtered, scale]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = points[Math.min(activeIndex, Math.max(points.length - 1, 0))];
+  const max = Math.max(...points.map((p) => p.count), 1);
+  return <LifeTraceShell><PageIntro index="02" eyebrow="Journey" title="Move through the traces.">A temporal map you can widen or narrow. The shape changes; the underlying records do not.</PageIntro>
+    <section className="mx-auto max-w-[1440px] px-5 pb-28 md:px-10"><div className="flex flex-col justify-between gap-5 border-y border-border py-4 sm:flex-row"><div className="flex gap-1" aria-label="Time scale">{(["year", "month", "day"] as const).map((item) => <Button key={item} variant={scale === item ? "default" : "ghost"} size="sm" onClick={() => { setScale(item); setActiveIndex(0); }}>{item}</Button>)}</div><div className="flex gap-1" aria-label="Moment type">{(["all", "music", "transaction"] as const).map((item) => <Button key={item} variant={kind === item ? "outline" : "ghost"} size="sm" onClick={() => { setKind(item); setActiveIndex(0); }}>{item}</Button>)}</div></div>
+      {points.length ? <div className="mt-14 grid gap-14 lg:grid-cols-[1fr_300px]"><div><SectionLabel>Touch a passage</SectionLabel><div className="flex h-[430px] items-end gap-1 overflow-x-auto border-b border-border px-2" role="listbox" aria-label="Temporal activity clusters">{points.map((point, index) => <button key={point.key} role="option" aria-selected={index === activeIndex} onClick={() => setActiveIndex(index)} className="group flex h-full min-w-8 flex-1 items-end justify-center focus-visible:outline-2 focus-visible:outline-ring"><span className={`w-full max-w-10 transition-all ${index === activeIndex ? "bg-foreground" : "bg-dusty-blue/60 group-hover:bg-dusty-blue"}`} style={{ height: `${14 + (point.count / max) * 76}%` }} /><span className="sr-only">{point.label}, {point.count} traces</span></button>)}</div><div className="mt-3 flex justify-between font-mono text-[9px] uppercase text-muted-foreground"><span>{points[0]?.label}</span><span>{points.at(-1)?.label}</span></div></div>
+        <aside className="border-t border-foreground pt-5"><div className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">Selected passage</div><h2 className="mt-5 font-display text-4xl">{active?.label}</h2><div className="mt-8 grid grid-cols-2 gap-6 border-y border-border py-5"><div><Music2 className="size-4"/><strong className="mt-3 block font-display text-3xl">{active?.music}</strong><span className="text-xs text-muted-foreground">listens</span></div><div><ReceiptText className="size-4"/><strong className="mt-3 block font-display text-3xl">{active?.transactions}</strong><span className="text-xs text-muted-foreground">receipts</span></div></div><div className="mt-6 space-y-4">{active?.moments.slice(0, 5).map((moment) => <div key={moment.id} className="border-b border-border pb-3"><div className="text-sm">{moment.title}</div><div className="text-xs text-muted-foreground">{moment.subtitle}</div></div>)}</div></aside></div> : <div className="py-32 text-center"><h2 className="font-display text-4xl">No traces in this view.</h2><p className="mt-3 text-sm text-muted-foreground">Try a different record type or time scale.</p></div>}
+    </section></LifeTraceShell>;
+}
