@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as JourneyRouteImport } from './routes/journey'
+import { Route as MomentsRouteImport } from './routes/moments'
+import { Route as PatternsRouteImport } from './routes/patterns'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JourneyRoute = JourneyRouteImport.update({
+  id: '/journey',
+  path: '/journey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MomentsRoute = MomentsRouteImport.update({
+  id: '/moments',
+  path: '/moments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PatternsRoute = PatternsRouteImport.update({
+  id: '/patterns',
+  path: '/patterns',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/journey': typeof JourneyRoute
+  '/moments': typeof MomentsRoute
+  '/patterns': typeof PatternsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/journey': typeof JourneyRoute
+  '/moments': typeof MomentsRoute
+  '/patterns': typeof PatternsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/journey': typeof JourneyRoute
+  '/moments': typeof MomentsRoute
+  '/patterns': typeof PatternsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/journey' | '/moments' | '/patterns'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/journey' | '/moments' | '/patterns'
+  id: '__root__' | '/' | '/journey' | '/moments' | '/patterns'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  JourneyRoute: typeof JourneyRoute
+  MomentsRoute: typeof MomentsRoute
+  PatternsRoute: typeof PatternsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +78,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/journey': {
+      id: '/journey'
+      path: '/journey'
+      fullPath: '/journey'
+      preLoaderRoute: typeof JourneyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/moments': {
+      id: '/moments'
+      path: '/moments'
+      fullPath: '/moments'
+      preLoaderRoute: typeof MomentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/patterns': {
+      id: '/patterns'
+      path: '/patterns'
+      fullPath: '/patterns'
+      preLoaderRoute: typeof PatternsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  JourneyRoute: JourneyRoute,
+  MomentsRoute: MomentsRoute,
+  PatternsRoute: PatternsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
