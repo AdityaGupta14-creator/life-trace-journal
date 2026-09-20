@@ -1,24 +1,359 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Music2, ReceiptText } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { ArrowRight, Calendar, Filter, Footprints, Music2, ReceiptText, Sparkles } from "lucide-react";
 import { LifeTraceShell, PageIntro, SectionLabel } from "@/components/lifetrace-shell";
 import { Button } from "@/components/ui/button";
-import { aggregateByDay, aggregateByHour, aggregateByMonth, byKind } from "@/lib/lifetrace-analysis";
-import { lifeMoments, type MomentKind } from "@/lib/lifetrace-data";
+import { TraceDialog } from "@/components/trace-dialog";
+import {
+  aggregateByDay,
+  aggregateByHour,
+  aggregateByMonth,
+  aggregateByYear,
+  byKind,
+  generatePeriodSummary,
+  type AggregatePoint,
+} from "@/lib/lifetrace-analysis";
+import {
+  archiveSummary,
+  fetchAllMoments,
+  initialMoments,
+  type LifeMoment,
+  type MomentKind,
+} from "@/lib/lifetrace-data";
 
-export const Route = createFileRoute("/journey")({ head: () => ({ meta: [{ title: "Journey — LIFE//TRACE" }, { name: "description", content: "Move through a digital life by year, month, and day." }, { property: "og:title", content: "Journey — LIFE//TRACE" }, { property: "og:description", content: "An interactive temporal passage through listening and transaction traces." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: JourneyPage });
+export const Route = createFileRoute("/journey")({
+  head: () => ({
+    meta: [
+      { title: "Journey — LIFE//TRACE" },
+      {
+        name: "description",
+        content: "Move through a digital life by year, month, and day. Discover period overviews, factual narratives, representative moments, and connected traces.",
+      },
+      { property: "og:title", content: "Journey — LIFE//TRACE" },
+      {
+        property: "og:description",
+        content: "An interactive editorial temporal passage through listening and transaction traces.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: JourneyPage,
+});
 
 function JourneyPage() {
-  const [scale, setScale] = useState<"year" | "month" | "day">("year");
+  const [scale, setScale] = useState<"year" | "month" | "day">("month");
   const [kind, setKind] = useState<MomentKind | "all">("all");
-  const filtered = useMemo(() => byKind(lifeMoments, kind), [kind]);
-  const points = useMemo(() => scale === "year" ? aggregateByMonth(filtered) : scale === "month" ? aggregateByDay(filtered) : aggregateByHour(filtered), [filtered, scale]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const active = points[Math.min(activeIndex, Math.max(points.length - 1, 0))];
-  const max = Math.max(...points.map((p) => p.count), 1);
-  return <LifeTraceShell><PageIntro index="02" eyebrow="Journey" title="Move through the traces.">A temporal map you can widen or narrow. The shape changes; the underlying records do not.</PageIntro>
-    <section className="mx-auto max-w-[1440px] px-5 pb-28 md:px-10"><div className="flex flex-col justify-between gap-5 border-y border-border py-4 sm:flex-row"><div className="flex gap-1" aria-label="Time scale">{(["year", "month", "day"] as const).map((item) => <Button key={item} variant={scale === item ? "default" : "ghost"} size="sm" onClick={() => { setScale(item); setActiveIndex(0); }}>{item}</Button>)}</div><div className="flex gap-1" aria-label="Moment type">{(["all", "music", "transaction"] as const).map((item) => <Button key={item} variant={kind === item ? "outline" : "ghost"} size="sm" onClick={() => { setKind(item); setActiveIndex(0); }}>{item}</Button>)}</div></div>
-      {points.length ? <div className="mt-14 grid gap-14 lg:grid-cols-[1fr_300px]"><div><SectionLabel>Touch a passage</SectionLabel><div className="flex h-[430px] items-end gap-1 overflow-x-auto border-b border-border px-2" role="listbox" aria-label="Temporal activity clusters">{points.map((point, index) => <button key={point.key} role="option" aria-selected={index === activeIndex} onClick={() => setActiveIndex(index)} className="group flex h-full min-w-8 flex-1 items-end justify-center focus-visible:outline-2 focus-visible:outline-ring"><span className={`w-full max-w-10 transition-all ${index === activeIndex ? "bg-foreground" : "bg-dusty-blue/60 group-hover:bg-dusty-blue"}`} style={{ height: `${14 + (point.count / max) * 76}%` }} /><span className="sr-only">{point.label}, {point.count} traces</span></button>)}</div><div className="mt-3 flex justify-between font-mono text-[9px] uppercase text-muted-foreground"><span>{points[0]?.label}</span><span>{points.at(-1)?.label}</span></div></div>
-        <aside className="border-t border-foreground pt-5"><div className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">Selected passage</div><h2 className="mt-5 font-display text-4xl">{active?.label}</h2><div className="mt-8 grid grid-cols-2 gap-6 border-y border-border py-5"><div><Music2 className="size-4"/><strong className="mt-3 block font-display text-3xl">{active?.music}</strong><span className="text-xs text-muted-foreground">listens</span></div><div><ReceiptText className="size-4"/><strong className="mt-3 block font-display text-3xl">{active?.transactions}</strong><span className="text-xs text-muted-foreground">receipts</span></div></div><div className="mt-6 space-y-4">{active?.moments.slice(0, 5).map((moment) => <div key={moment.id} className="border-b border-border pb-3"><div className="text-sm">{moment.title}</div><div className="text-xs text-muted-foreground">{moment.subtitle}</div></div>)}</div></aside></div> : <div className="py-32 text-center"><h2 className="font-display text-4xl">No traces in this view.</h2><p className="mt-3 text-sm text-muted-foreground">Try a different record type or time scale.</p></div>}
-    </section></LifeTraceShell>;
+  const [moments, setMoments] = useState<LifeMoment[]>(initialMoments);
+  const [selectedTraceMoment, setSelectedTraceMoment] = useState<LifeMoment | null>(null);
+
+  // Background fetch full moments
+  useEffect(() => {
+    fetchAllMoments().then((data) => {
+      setMoments(data);
+    });
+  }, []);
+
+  const filtered = useMemo(() => byKind(moments, kind), [moments, kind]);
+
+  // Aggregate points based on chosen scale
+  const points: AggregatePoint[] = useMemo(() => {
+    if (scale === "year") {
+      if (archiveSummary?.years && kind === "all") {
+        return archiveSummary.years.map((y) => ({
+          key: y.key,
+          label: y.key,
+          count: y.music + y.transactions,
+          music: y.music,
+          transactions: y.transactions,
+          moments: moments.filter((m) => m.occurredAt.startsWith(y.key)),
+        }));
+      }
+      return aggregateByYear(filtered);
+    }
+    if (scale === "month") {
+      if (archiveSummary?.months && kind === "all") {
+        return archiveSummary.months.map((m) => ({
+          key: m.key,
+          label: m.label,
+          count: m.count,
+          music: m.music,
+          transactions: m.transactions,
+          moments: moments.filter((item) => item.occurredAt.startsWith(m.key)),
+        }));
+      }
+      return aggregateByMonth(filtered);
+    }
+    return aggregateByDay(filtered);
+  }, [filtered, moments, scale, kind]);
+
+  // Default active index: choose 2017 or a dense month
+  const defaultIndex = useMemo(() => {
+    if (!points.length) return 0;
+    const peakIdx = points.findIndex((p) => p.key.includes("2017-08") || p.key === "2017");
+    return peakIdx >= 0 ? peakIdx : Math.min(10, points.length - 1);
+  }, [points]);
+
+  const [activeIndex, setActiveIndex] = useState(defaultIndex);
+
+  const activePoint = points[Math.min(activeIndex, Math.max(points.length - 1, 0))];
+
+  // Calculate real period summary & factual narrative
+  const periodSummary = useMemo(() => {
+    if (!activePoint) return null;
+    return generatePeriodSummary(activePoint.key, moments);
+  }, [activePoint, moments]);
+
+  const maxCount = Math.max(...points.map((p) => p.count), 1);
+
+  return (
+    <LifeTraceShell>
+      <PageIntro
+        index="02"
+        eyebrow="Journey"
+        title="Move through the traces."
+      >
+        A temporal map across 11 recorded years. Zoom between year, month, and day perspectives. The scale adjusts; the underlying records remain authentic.
+      </PageIntro>
+
+      <section className="mx-auto max-w-[1440px] px-5 pb-28 md:px-10">
+        {/* Controls Bar */}
+        <div className="flex flex-col justify-between gap-5 border-y border-border py-4 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground mr-2">
+              Time scale:
+            </span>
+            <div className="flex gap-1" role="group" aria-label="Time scale">
+              {(["year", "month", "day"] as const).map((item) => (
+                <Button
+                  key={item}
+                  variant={scale === item ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setScale(item);
+                    setActiveIndex(0);
+                  }}
+                  className="capitalize font-mono text-xs"
+                >
+                  {item}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground mr-2">
+              Receipt type:
+            </span>
+            <div className="flex gap-1" role="group" aria-label="Moment type">
+              {(["all", "music", "transaction"] as const).map((item) => (
+                <Button
+                  key={item}
+                  variant={kind === item ? "outline" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setKind(item);
+                    setActiveIndex(0);
+                  }}
+                  className="capitalize font-mono text-xs"
+                >
+                  {item}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Temporal Cluster Exploration */}
+        {points.length > 0 ? (
+          <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_360px]">
+            <div>
+              <div className="flex items-center justify-between">
+                <SectionLabel>Select a temporal passage</SectionLabel>
+                <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                  {points.length} periods mapped
+                </span>
+              </div>
+
+              {/* Scrollable Bar Cluster */}
+              <div
+                className="flex h-[380px] items-end gap-1 overflow-x-auto border-b border-border px-2 pb-2"
+                role="listbox"
+                aria-label="Temporal activity clusters"
+              >
+                {points.map((point, index) => {
+                  const isSelected = index === activeIndex;
+                  const hasTx = point.transactions > 0;
+                  const heightPercent = Math.max(10, (point.count / maxCount) * 88);
+
+                  return (
+                    <button
+                      key={point.key}
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => setActiveIndex(index)}
+                      className="group relative flex h-full min-w-7 flex-1 items-end justify-center focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <div
+                        className={`w-full max-w-8 transition-all ${
+                          isSelected
+                            ? "bg-foreground"
+                            : hasTx
+                            ? "bg-ochre/70 group-hover:bg-ochre"
+                            : "bg-dusty-blue/50 group-hover:bg-dusty-blue"
+                        }`}
+                        style={{ height: `${heightPercent}%` }}
+                      />
+                      <span className="sr-only">
+                        {point.label}, {point.count.toLocaleString()} traces
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Timeline Bounds */}
+              <div className="mt-3 flex justify-between font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                <span>{points[0]?.label}</span>
+                <span>{points[Math.floor(points.length / 2)]?.label}</span>
+                <span>{points[points.length - 1]?.label}</span>
+              </div>
+
+              {/* Factual Contextual Narrative */}
+              {periodSummary && (
+                <div className="mt-10 border-t border-border pt-8">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Contextual Archival Narrative
+                  </div>
+                  <p className="mt-4 font-display text-2xl leading-relaxed text-foreground md:text-3xl">
+                    "{periodSummary.narrative}"
+                  </p>
+                  <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+                    Derived strictly from observable record tallies. No personal or causal assumptions made.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Selected Period Details Sidebar */}
+            <aside className="border-t border-foreground pt-5 lg:border-l lg:border-t-0 lg:pl-8">
+              <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+                Selected Period Overview
+              </div>
+              <h2 className="mt-4 font-display text-4xl text-foreground">
+                {activePoint?.label}
+              </h2>
+
+              {/* Activity Mix */}
+              <div className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-4 font-mono">
+                <div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                    <Music2 className="size-3.5 text-dusty-blue" />
+                    <span>Music</span>
+                  </div>
+                  <strong className="mt-2 block font-display text-3xl font-normal">
+                    {activePoint?.music.toLocaleString()}
+                  </strong>
+                  <span className="text-[10px] text-muted-foreground">listening moments</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                    <ReceiptText className="size-3.5 text-ochre" />
+                    <span>Receipts</span>
+                  </div>
+                  <strong className="mt-2 block font-display text-3xl font-normal">
+                    {activePoint?.transactions.toLocaleString()}
+                  </strong>
+                  <span className="text-[10px] text-muted-foreground">daily transactions</span>
+                </div>
+              </div>
+
+              {/* Observed Period Patterns */}
+              {periodSummary && (
+                <div className="mt-6 space-y-2">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                    Observed Patterns in this Period
+                  </div>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {periodSummary.patterns.map((pat, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-foreground">·</span>
+                        <span>{pat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Representative Moments */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                    Representative Moments
+                  </div>
+                  <span className="font-mono text-[9px] text-muted-foreground">Click to Trace</span>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(activePoint?.moments.slice(0, 6) ?? []).map((moment) => (
+                    <button
+                      key={moment.id}
+                      onClick={() => setSelectedTraceMoment(moment)}
+                      className="group flex w-full flex-col border border-border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:border-foreground hover:shadow-paper focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {moment.kind === "music" ? (
+                            <Music2 className="size-3 text-dusty-blue" />
+                          ) : (
+                            <ReceiptText className="size-3 text-ochre" />
+                          )}
+                          <span className="font-mono text-[9px] uppercase text-muted-foreground">
+                            {moment.kind}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[8px] text-muted-foreground">
+                          {new Date(moment.occurredAt).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: "UTC",
+                          })}
+                        </span>
+                      </div>
+                      <div className="mt-2 font-display text-base leading-snug group-hover:text-foreground">
+                        {moment.title}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                        {moment.subtitle}
+                      </div>
+                      <div className="mt-2 flex items-center gap-1 font-mono text-[8px] uppercase tracking-wider text-foreground group-hover:underline">
+                        <span>Follow trace</span>
+                        <ArrowRight className="size-2.5" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+        ) : (
+          <div className="py-32 text-center">
+            <h2 className="font-display text-4xl">No traces found in this period.</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Try choosing a broader time scale or choosing "All" receipt types.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Follow the Trace Dialog */}
+      <TraceDialog
+        moment={selectedTraceMoment}
+        moments={moments}
+        open={Boolean(selectedTraceMoment)}
+        onOpenChange={(open) => !open && setSelectedTraceMoment(null)}
+        onMomentChange={setSelectedTraceMoment}
+      />
+    </LifeTraceShell>
+  );
 }

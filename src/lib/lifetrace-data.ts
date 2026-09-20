@@ -1,5 +1,15 @@
+import summaryData from "../data/archive-summary.json";
+import initialMomentsData from "../data/initial-moments.json";
+
 export type MomentKind = "music" | "transaction";
-export type MomentCategory = "Music" | "Food" | "Transportation" | "Subscriptions" | "Other";
+export type MomentCategory =
+  | "Music"
+  | "Food"
+  | "Transportation"
+  | "Subscriptions"
+  | "Household"
+  | "Health"
+  | "Other";
 
 export type LifeMoment = {
   id: string;
@@ -10,64 +20,143 @@ export type LifeMoment = {
   subtitle: string;
   detail: string;
   value?: number;
+  currency?: string;
   completed?: boolean;
   paymentMethod?: string;
+  subcategory?: string;
+  note?: string;
+  metadata?: {
+    platform?: string;
+    durationMs?: number;
+    shuffle?: boolean;
+    reasonStart?: string;
+    reasonEnd?: string;
+    album?: string;
+    uri?: string;
+    [key: string]: any;
+  };
 };
 
-const artists = ["Bon Iver", "Nina Simone", "Radiohead", "Khruangbin", "Joni Mitchell", "The National"];
-const tracks = ["Holocene", "Sinnerman", "Reckoner", "Friday Morning", "A Case of You", "Light Years"];
-const merchants = ["Corner Table", "Metro Transit", "The Reading Room", "North Star Coffee", "Mubi", "Sunday Market"];
-const transactionCategories: MomentCategory[] = ["Food", "Transportation", "Other", "Food", "Subscriptions", "Other"];
+export type ArchiveSummary = typeof summaryData;
 
-function dateFor(index: number, hour: number) {
-  const date = new Date(Date.UTC(2022 + Math.floor(index / 24), (index * 3) % 12, 2 + ((index * 7) % 25), hour, (index * 11) % 60));
-  return date.toISOString();
+export const datasetScale = summaryData.scale;
+export const archiveSummary: ArchiveSummary = summaryData;
+
+// Initial 200 real records for immediate synchronous SSR hydration
+export const initialMoments: LifeMoment[] = (initialMomentsData as any[]).map((m) => ({
+  ...m,
+  category: m.category as MomentCategory,
+}));
+
+// Default in-memory moments starting with initial real dataset
+export let lifeMoments: LifeMoment[] = initialMoments;
+
+let allMomentsCache: LifeMoment[] | null = null;
+let loadPromise: Promise<LifeMoment[]> | null = null;
+
+export async function fetchAllMoments(): Promise<LifeMoment[]> {
+  if (allMomentsCache) return allMomentsCache;
+  if (loadPromise) return loadPromise;
+
+  loadPromise = (async () => {
+    try {
+      if (typeof window !== "undefined") {
+        const res = await fetch("/data/archive-moments.json");
+        if (res.ok) {
+          const data = await res.json();
+          allMomentsCache = data as LifeMoment[];
+          lifeMoments = allMomentsCache;
+          return allMomentsCache;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch full archive moments, using initial moments:", err);
+    }
+    allMomentsCache = initialMoments;
+    return initialMoments;
+  })();
+
+  return loadPromise;
 }
-
-const sampleMusic: LifeMoment[] = Array.from({ length: 48 }, (_, index) => {
-  const artistIndex = index % artists.length;
-  const hour = index % 5 === 0 ? 0 + (index % 3) : 7 + ((index * 4) % 16);
-  return {
-    id: `m-${index + 1}`,
-    kind: "music",
-    category: "Music",
-    occurredAt: dateFor(index, hour),
-    title: tracks[artistIndex] ?? "Untitled track",
-    subtitle: artists[artistIndex] ?? "Unknown artist",
-    detail: index % 4 === 0 ? "Skipped after the first minute" : "Listened through",
-    completed: index % 4 !== 0,
-  };
-});
-
-const sampleTransactions: LifeMoment[] = Array.from({ length: 18 }, (_, index) => {
-  const merchantIndex = index % merchants.length;
-  const anchor = index * 2;
-  const hour = 8 + ((index * 5) % 13);
-  return {
-    id: `t-${index + 1}`,
-    kind: "transaction",
-    category: transactionCategories[merchantIndex] ?? "Other",
-    occurredAt: dateFor(anchor, hour),
-    title: merchants[merchantIndex] ?? "Unknown merchant",
-    subtitle: transactionCategories[merchantIndex] ?? "Other",
-    detail: index % 3 === 0 ? "Paid with mobile wallet" : "Paid with card",
-    value: 4.5 + ((index * 13) % 47),
-    paymentMethod: index % 3 === 0 ? "Mobile wallet" : "Card",
-  };
-});
-
-export const lifeMoments = [...sampleMusic, ...sampleTransactions].sort(
-  (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime(),
-);
-
-export const datasetScale = { music: 149860, transactions: 2461 };
 
 export interface LifeDataAdapter {
+  getSummary(): Promise<ArchiveSummary>;
   getMoments(): Promise<LifeMoment[]>;
+  getMomentById(id: string): Promise<LifeMoment | null>;
+  searchMoments(params: {
+    query?: string;
+    kind?: MomentKind | "all";
+    category?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    pageSize?: number;
+    ascending?: boolean;
+  }): Promise<{ items: LifeMoment[]; total: number; page: number; totalPages: number }>;
 }
 
-export const mockLifeDataAdapter: LifeDataAdapter = {
+export const archiveDataAdapter: LifeDataAdapter = {
+  async getSummary() {
+    return archiveSummary;
+  },
+
   async getMoments() {
-    return lifeMoments;
+    return fetchAllMoments();
+  },
+
+  async getMomentById(id: string) {
+    const moments = await fetchAllMoments();
+    return moments.find((m) => m.id === id) ?? null;
+  },
+
+  async searchMoments({
+    query = "",
+    kind = "all",
+    category = "All",
+    startDate,
+    endDate,
+    page = 1,
+    pageSize = 24,
+    ascending = false,
+  }) {
+    const moments = await fetchAllMoments();
+    const q = query.toLowerCase().trim();
+
+    const filtered = moments.filter((m) => {
+      if (kind !== "all" && m.kind !== kind) return false;
+      if (category !== "All") {
+        if (category === "Transactions" && m.kind !== "transaction") return false;
+        if (category !== "Transactions" && m.category !== category) return false;
+      }
+      if (startDate && m.occurredAt < startDate) return false;
+      if (endDate && m.occurredAt > endDate) return false;
+
+      if (q) {
+        const text = `${m.title} ${m.subtitle} ${m.detail} ${m.category} ${m.paymentMethod || ""} ${m.metadata?.album || ""}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    filtered.sort((a, b) => {
+      const diff = new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime();
+      return ascending ? diff : -diff;
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const start = (safePage - 1) * pageSize;
+    const items = filtered.slice(start, start + pageSize);
+
+    return {
+      items,
+      total,
+      page: safePage,
+      totalPages,
+    };
   },
 };
+
+export const mockLifeDataAdapter = archiveDataAdapter;
