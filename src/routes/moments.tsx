@@ -77,14 +77,14 @@ function MomentsPage() {
 
   // Sync back to URL
   useEffect(() => {
-    const newSearch: Record<string, string> = {};
-    if (deferredQuery) newSearch.query = deferredQuery;
-    if (filter !== "All") newSearch.filter = filter;
-    if (startDate) newSearch.startDate = startDate;
-    if (endDate) newSearch.endDate = endDate;
-    
     navigate({
-      search: newSearch,
+      search: (prev) => ({
+        ...prev,
+        query: deferredQuery || undefined,
+        filter,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      }),
       replace: true,
     });
   }, [deferredQuery, filter, startDate, endDate, navigate]);

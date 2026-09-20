@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Archive, Bookmark, Compass, Footprints, Grid2X2, Search } from "lucide-react";
+import { Archive, Bookmark, BookOpen, Compass, Footprints, Grid2X2, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { useSavedTraces } from "@/hooks/useSavedTraces";
 
@@ -8,6 +8,7 @@ const links = [
   { to: "/journey", label: "Journey", icon: Footprints },
   { to: "/patterns", label: "Patterns", icon: Grid2X2 },
   { to: "/moments", label: "Moments", icon: Search },
+  { to: "/chapters", label: "Chapters", icon: BookOpen },
 ] as const;
 
 export function LifeTraceShell({ children }: { children: ReactNode }) {
@@ -36,7 +37,7 @@ export function LifeTraceShell({ children }: { children: ReactNode }) {
       </div>
     </header>
     <main className="pb-24 md:pb-0">{children}</main>
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="Mobile navigation">
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="Mobile navigation">
       {links.map(({ to, label, icon: Icon }) => <Link key={to} to={to} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[10px] ${pathname === to ? "text-foreground" : "text-muted-foreground"}`}><Icon className="size-4" /><span>{label}</span></Link>)}
     </nav>
   </div>;

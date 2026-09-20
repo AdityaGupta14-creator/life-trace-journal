@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState, useEffect, useRef, forwardRef, CSSProperties } from "react";
-import { FixedSizeList as List } from "react-window";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowRight, Calendar, Filter, Footprints, Music2, ReceiptText, Sparkles } from "lucide-react";
 import { LifeTraceShell, PageIntro, SectionLabel } from "@/components/lifetrace-shell";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,21 @@ function JourneyPage() {
     return () => {};
   }, []);
 
+  const itemSize = useMemo(() => {
+    if (scale === "year") {
+      return Math.max(64, containerWidth > 0 && points.length > 0 ? Math.floor(containerWidth / points.length) : 64);
+    }
+    return scale === "month" ? 28 : 12;
+  }, [scale, containerWidth, points.length]);
+
+  const virtualizer = useVirtualizer({
+    count: points.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => itemSize,
+    horizontal: true,
+    overscan: 12,
+  });
+
   // Default active index: choose 2017 or a dense month
   const defaultIndex = useMemo(() => {
     if (!points.length) return 0;
@@ -147,13 +162,13 @@ function JourneyPage() {
 
   // Sync back to URL
   useEffect(() => {
-    const newSearch: Record<string, string> = {};
-    if (activePoint?.key) newSearch.period = activePoint.key;
-    if (scale !== "month") newSearch.scale = scale;
-    if (kind !== "all") newSearch.kind = kind;
-    
     navigate({
-      search: newSearch,
+      search: (prev) => ({
+        ...prev,
+        period: activePoint?.key || undefined,
+        scale,
+        kind,
+      }),
       replace: true,
     });
   }, [activePoint?.key, scale, kind, navigate]);
@@ -275,23 +290,20 @@ function JourneyPage() {
               {/* Scrollable Bar Cluster */}
               <div
                 ref={containerRef}
-                className="h-[390px] w-full border-b border-border pt-16 pb-2"
+                className="h-[390px] w-full overflow-x-auto overflow-y-hidden border-b border-border pt-16 pb-2 select-none"
                 role="listbox"
                 aria-label="Temporal activity clusters"
+                tabIndex={0}
               >
-                <List
-                  height={310} // 390 - pt-16 (64px) - pb-2 (8px) = 318 roughly. We use 310
-                  itemCount={points.length}
-                  itemSize={scale === "day" ? 12 : scale === "month" ? 28 : 64}
-                  layout="horizontal"
-                  width={containerWidth}
-                  innerElementType={forwardRef<HTMLDivElement, React.HTMLProps<HTMLDivElement>>(
-                    ({ style, ...rest }, ref) => (
-                      <div ref={ref} style={{ ...style, display: "flex", alignItems: "flex-end", height: "100%" }} {...rest} />
-                    )
-                  )}
+                <div
+                  style={{
+                    width: `${virtualizer.getTotalSize()}px`,
+                    height: "100%",
+                    position: "relative",
+                  }}
                 >
-                  {({ index, style }: { index: number; style: CSSProperties }) => {
+                  {virtualizer.getVirtualItems().map((virtualItem) => {
+                    const index = virtualItem.index;
                     const point = points[index];
                     if (!point) return null;
                     const isSelected = index === activeIndex;
@@ -300,8 +312,20 @@ function JourneyPage() {
                     const heightPercent = Math.max(10, (point.count / maxCount) * 82);
 
                     return (
-                      <div style={style} className="px-px">
+                      <div
+                        key={virtualItem.key}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: `${virtualItem.size}px`,
+                          height: "100%",
+                          transform: `translateX(${virtualItem.start}px)`,
+                        }}
+                        className="px-px"
+                      >
                         <button
+                          type="button"
                           role="option"
                           aria-selected={isSelected}
                           onClick={() => setActiveIndex(index)}
@@ -353,8 +377,8 @@ function JourneyPage() {
                         </button>
                       </div>
                     );
-                  }}
-                </List>
+                  })}
+                </div>
               </div>
 
 

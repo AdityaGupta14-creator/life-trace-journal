@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChaptersRouteImport } from './routes/chapters'
 import { Route as JourneyRouteImport } from './routes/journey'
 import { Route as MomentsRouteImport } from './routes/moments'
 import { Route as PatternsRouteImport } from './routes/patterns'
@@ -17,6 +18,11 @@ import { Route as PatternsRouteImport } from './routes/patterns'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChaptersRoute = ChaptersRouteImport.update({
+  id: '/chapters',
+  path: '/chapters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JourneyRoute = JourneyRouteImport.update({
@@ -37,12 +43,14 @@ const PatternsRoute = PatternsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chapters': typeof ChaptersRoute
   '/journey': typeof JourneyRoute
   '/moments': typeof MomentsRoute
   '/patterns': typeof PatternsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chapters': typeof ChaptersRoute
   '/journey': typeof JourneyRoute
   '/moments': typeof MomentsRoute
   '/patterns': typeof PatternsRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chapters': typeof ChaptersRoute
   '/journey': typeof JourneyRoute
   '/moments': typeof MomentsRoute
   '/patterns': typeof PatternsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/journey' | '/moments' | '/patterns'
+  fullPaths: '/' | '/chapters' | '/journey' | '/moments' | '/patterns'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/journey' | '/moments' | '/patterns'
-  id: '__root__' | '/' | '/journey' | '/moments' | '/patterns'
+  to: '/' | '/chapters' | '/journey' | '/moments' | '/patterns'
+  id: '__root__' | '/' | '/chapters' | '/journey' | '/moments' | '/patterns'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChaptersRoute: typeof ChaptersRoute
   JourneyRoute: typeof JourneyRoute
   MomentsRoute: typeof MomentsRoute
   PatternsRoute: typeof PatternsRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chapters': {
+      id: '/chapters'
+      path: '/chapters'
+      fullPath: '/chapters'
+      preLoaderRoute: typeof ChaptersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/journey': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChaptersRoute: ChaptersRoute,
   JourneyRoute: JourneyRoute,
   MomentsRoute: MomentsRoute,
   PatternsRoute: PatternsRoute,
