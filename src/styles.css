@@ -164,6 +164,7 @@
     font-family: var(--font-interface);
     letter-spacing: 0;
     text-rendering: optimizeLegibility;
+    overflow-x: clip;
   }
 
   button, a, input { outline-color: var(--ring); }

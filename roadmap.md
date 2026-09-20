@@ -1,7 +1,7 @@
 # LIFE//TRACE build
 
-- [ ] Create typed sample-data adapter and analysis utilities
-- [ ] Build shared editorial shell and interactive visual language
-- [ ] Build Discover, Journey, Patterns, and Moments experiences
-- [ ] Add meaningful empty/loading/error states, keyboard discovery, and explicit evidence/correlation language
-- [ ] Verify build and responsive interactions
+- [x] Create typed sample-data adapter and analysis utilities
+- [x] Build shared editorial shell and interactive visual language
+- [x] Build Discover, Journey, Patterns, and Moments experiences
+- [x] Add meaningful empty/loading/error states, keyboard discovery, and explicit evidence/correlation language
+- [x] Verify build and responsive interactions

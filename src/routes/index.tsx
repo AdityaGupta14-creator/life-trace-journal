@@ -29,7 +29,7 @@ function DiscoverPage() {
   return <LifeTraceShell>
     <section className="mx-auto max-w-[1440px] px-5 pb-20 pt-14 md:px-10 md:pb-28 md:pt-20">
       <div className="grid items-end gap-12 lg:grid-cols-[1.45fr_0.55fr]">
-        <div><div className="mb-7 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">A digital archaeology · Archive 2022—2023</div><h1 className="font-display text-[clamp(4.5rem,13vw,12rem)] leading-[0.72] tracking-normal">LIFE<span className="text-muted-foreground">//</span>TRACE</h1><p className="mt-12 font-display text-3xl italic md:text-5xl">A life leaves traces.</p></div>
+        <div className="min-w-0"><div className="mb-7 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.22em]">A digital archaeology · Archive 2022—2023</div><h1 className="font-display text-[clamp(3.5rem,12vw,12rem)] leading-[0.78] tracking-normal">LIFE<span className="text-muted-foreground">//</span>TRACE</h1><p className="mt-12 font-display text-3xl italic md:text-5xl">A life leaves traces.</p></div>
         <div className="border-t border-border pt-5 text-sm leading-6 text-muted-foreground lg:mb-2">Fragments of listening and spending, gathered into patterns you can touch. Not a verdict on a life—an invitation to look closer.</div>
       </div>
       <div className="mt-14 grid grid-cols-2 border-y border-border md:mt-20 md:w-1/2">
