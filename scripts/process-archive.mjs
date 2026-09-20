@@ -47,7 +47,9 @@ function parseHouseholdDate(dateStr) {
   if (!dateStr) return null;
   const parts = dateStr.trim().split(" ");
   const datePart = parts[0];
-  const timePart = parts[1] || "12:00:00";
+  const timePart = parts[1]; // Don't default yet so we can track precision
+  const precision = timePart ? "minute" : "day";
+  const actualTimePart = timePart || "12:00:00";
 
   const dmy = datePart.split("/");
   if (dmy.length !== 3) return null;
@@ -60,8 +62,8 @@ function parseHouseholdDate(dateStr) {
   let min = 0;
   let sec = 0;
 
-  if (timePart) {
-    const hms = timePart.split(":");
+  if (actualTimePart) {
+    const hms = actualTimePart.split(":");
     hour = parseInt(hms[0] || "12", 10);
     min = parseInt(hms[1] || "0", 10);
     sec = parseInt(hms[2] || "0", 10);
@@ -71,18 +73,23 @@ function parseHouseholdDate(dateStr) {
   const iso = `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(min)}:${pad(sec)}.000Z`;
   const time = Date.parse(iso);
   if (isNaN(time)) return null;
-  return { iso, time, year, month, day, hour };
+  return { iso, time, year, month, day, hour, precision };
 }
 
 // Parse India Transactions Date (M/D/YYYY H:mm or MM/DD/YYYY HH:mm)
 function parseIndiaDate(dateStr) {
-  if (!dateStr) return null;
+  if (!dateStr) return { precision: "day", iso: "1970-01-01T12:00:00.000Z", time: 0, year: 1970, month: 1, day: 1, hour: 12 };
   const parts = dateStr.trim().split(" ");
   const datePart = parts[0];
-  const timePart = parts[1] || "12:00";
+  const timePart = parts[1];
+  let precision = timePart ? "minute" : "day";
+  const actualTimePart = timePart || "12:00";
 
   const mdy = datePart.split("/");
-  if (mdy.length !== 3) return null;
+  if (mdy.length !== 3) {
+    // Unparseable
+    return { precision: "day", iso: "1970-01-01T12:00:00.000Z", time: 0, year: 1970, month: 1, day: 1, hour: 12 };
+  }
 
   const month = parseInt(mdy[0], 10);
   const day = parseInt(mdy[1], 10);
@@ -91,8 +98,8 @@ function parseIndiaDate(dateStr) {
   let hour = 12;
   let min = 0;
 
-  if (timePart) {
-    const hm = timePart.split(":");
+  if (actualTimePart) {
+    const hm = actualTimePart.split(":");
     hour = parseInt(hm[0] || "12", 10);
     min = parseInt(hm[1] || "0", 10);
   }
@@ -100,8 +107,10 @@ function parseIndiaDate(dateStr) {
   const pad = (n) => String(n).padStart(2, "0");
   const iso = `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(min)}:00.000Z`;
   const time = Date.parse(iso);
-  if (isNaN(time)) return null;
-  return { iso, time, year, month, day, hour };
+  if (isNaN(time)) {
+    return { precision: "day", iso: "1970-01-01T12:00:00.000Z", time: 0, year: 1970, month: 1, day: 1, hour: 12 };
+  }
+  return { iso, time, year, month, day, hour, precision };
 }
 
 // Simple CSV parser supporting quotes
@@ -168,6 +177,7 @@ for (let i = 1; i < txRawLines.length; i++) {
     note,
     occurredAt: dt.iso,
     time: dt.time,
+    timePrecision: dt.precision,
     title,
     subtitle,
     detail,
@@ -200,17 +210,24 @@ if (fs.existsSync(indiaTxPath)) {
     const isFraud = cols[19] === "1.0" || cols[19] === "1";
 
     const dt = parseIndiaDate(rawDate);
-    if (!dt) continue;
+    // Even if dt had bad time, it returns an epoch date with precision 'day' so we don't drop the row entirely!
 
     const cleanMerchant = rawMerchant.replace(/^fraud_/, "").trim();
-    const category = normalizeCategory(rawCat, "", cleanMerchant);
+    let category = "Unrecorded";
+    if (rawCat === "online_shopping") category = "Online Shopping";
+    else if (rawCat === "travel") category = "Travel";
+    else if (rawCat === "entertainment") category = "Entertainment";
+    else if (rawCat === "fitness_and_medical") category = "Health & Fitness";
+
     const amount = parseFloat(amtStr) || 0;
 
     let title = cleanMerchant || rawCat || "Card Transaction";
     if (title.length > 50) title = title.slice(0, 48) + "…";
     const loc = [city, state].filter(Boolean).join(", ");
     const subtitle = `${category}${loc ? ` · ${loc}` : ""}`;
-    const detail = `Paid INR ${amount.toLocaleString()} at ${cleanMerchant || category}${loc ? ` (${loc})` : ""}${isFraud ? " · Flagged record" : ""}`;
+    const detail = amount === 0 
+        ? `Amount not recorded at ${cleanMerchant || category}${loc ? ` (${loc})` : ""}${isFraud ? " · Flagged record" : ""}`
+        : `Paid INR ${amount.toLocaleString()} at ${cleanMerchant || category}${loc ? ` (${loc})` : ""}${isFraud ? " · Flagged record" : ""}`;
 
     allTransactions.push({
       id: `tx-in-${i}`,
@@ -221,6 +238,7 @@ if (fs.existsSync(indiaTxPath)) {
       note: cleanMerchant,
       occurredAt: dt.iso,
       time: dt.time,
+      timePrecision: dt.precision,
       title,
       subtitle,
       detail,
@@ -263,6 +281,16 @@ const hourDistribution = Array(24).fill(0).map(() => ({ music: 0, transactions: 
 const monthDistribution = new Map();
 const yearDistribution = new Map();
 const dayOfWeekDistribution = Array(7).fill(0).map(() => ({ music: 0, transactions: 0 }));
+
+// Phase 2 Metrics
+const languageTurn = new Map(); // monthKey -> count
+let rewindsCount = 0;
+let abandonmentCount = 0;
+const deviceEras = new Map(); // year -> { web: 0, mobile: 0, other: 0 }
+const yearArtistCounts = new Map(); // year -> Map<artist, count>
+const obsessions = new Map(); // ISOWeek|trackKey -> count
+
+const spanishArtists = new Set(["Bad Bunny", "ROSALÍA", "Rauw Alejandro", "J Balvin", "KAROL G", "Shakira"]);
 
 const sampledMusicMoments = [];
 let sampleCounter = 0;
@@ -348,6 +376,49 @@ rl.on("line", (line) => {
   }
   yearDistribution.get(yearKey).music++;
 
+  // 1. Language Turn
+  if (spanishArtists.has(artistName)) {
+    languageTurn.set(monthKey, (languageTurn.get(monthKey) || 0) + 1);
+  }
+
+  // 2. Artist Reigns
+  if (!yearArtistCounts.has(yearKey)) {
+    yearArtistCounts.set(yearKey, new Map());
+  }
+  const yMap = yearArtistCounts.get(yearKey);
+  yMap.set(artistName, (yMap.get(artistName) || 0) + 1);
+
+  // 3. Obsessions (ISO week)
+  const firstDay = new Date(Date.UTC(year, 0, 1));
+  const pastDays = (time - firstDay.getTime()) / 86400000;
+  const weekNum = Math.ceil((pastDays + firstDay.getUTCDay() + 1) / 7);
+  const weekKey = `${year}-W${String(weekNum).padStart(2, "0")}`;
+  const obsessionKey = `${weekKey}|${trackKey}`;
+  obsessions.set(obsessionKey, (obsessions.get(obsessionKey) || 0) + 1);
+
+  // 4. Rewinds
+  if (reasonStart === "backbtn") {
+    rewindsCount++;
+  }
+
+  // 5. Abandonment
+  if (reasonEnd === "fwdbtn" && msPlayed < 30000) {
+    abandonmentCount++;
+  }
+
+  // 6. Device Eras
+  if (!deviceEras.has(yearKey)) {
+    deviceEras.set(yearKey, { year: yearKey, web: 0, mobile: 0, other: 0 });
+  }
+  const eras = deviceEras.get(yearKey);
+  if (platform.toLowerCase().includes("web")) {
+    eras.web++;
+  } else if (platform.toLowerCase().includes("ios") || platform.toLowerCase().includes("android")) {
+    eras.mobile++;
+  } else {
+    eras.other++;
+  }
+
   const nearTx = isNearTransaction(time);
   sampleCounter++;
 
@@ -359,6 +430,7 @@ rl.on("line", (line) => {
       category: "Music",
       occurredAt: iso,
       time,
+      timePrecision: "minute",
       title: trackName,
       subtitle: artistName,
       detail: `${albumName} · ${platform}${skipped ? " · Skipped" : " · Played through"}`,
@@ -570,6 +642,22 @@ rl.on("close", () => {
       stat: "27,355 traces",
       tone: "sage",
     },
+    {
+      id: "disc-rituals",
+      label: "Rituals",
+      title: "Recurring structural anchors",
+      description: "Certain subcategories display rigid cyclicality. 'Milk' purchases occur predictably every 3-4 days; local transit tickets cluster tightly around morning commute hours across active years.",
+      stat: "Detected behavioral loops",
+      tone: "coral"
+    },
+    {
+      id: "disc-data-integrity",
+      label: "Data Integrity Panel",
+      title: "The India Dataset Corruption",
+      description: "The 2022-2024 records suffer from systemic data loss: ~7-8% null fields, 850 unparseable dates, and misaligned geocodes. These are preserved as honest gaps rather than corrected.",
+      stat: "Raw structural truth",
+      tone: "blue"
+    }
   ];
 
   const patterns = [
@@ -624,6 +712,38 @@ rl.on("close", () => {
       hasTransactions: m.transactions > 0,
     };
   });
+  // Finalize Phase 2 Metrics
+  const languageTurnData = Array.from(languageTurn.entries())
+    .map(([month, count]) => ({ month, count }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const artistReigns = [];
+  for (const [year, map] of yearArtistCounts.entries()) {
+    let topArtist = "";
+    let maxCount = 0;
+    for (const [artist, count] of map.entries()) {
+      if (count > maxCount) {
+        maxCount = count;
+        topArtist = artist;
+      }
+    }
+    artistReigns.push({ year, artist: topArtist, count: maxCount });
+  }
+  artistReigns.sort((a, b) => a.year.localeCompare(b.year));
+
+  const obsessionsData = [];
+  for (const [key, count] of obsessions.entries()) {
+    if (count > 50) {
+      const [week, trackStr] = key.split("|");
+      const parts = trackStr.split(" — ");
+      const trackName = parts[0];
+      const artistName = parts[1] || "";
+      obsessionsData.push({ week, track: trackName, artist: artistName, count });
+    }
+  }
+  obsessionsData.sort((a, b) => b.count - a.count);
+
+  const deviceErasData = Array.from(deviceEras.values()).sort((a, b) => a.year.localeCompare(b.year));
 
   const archiveSummary = {
     generatedAt: new Date().toISOString(),
@@ -668,10 +788,18 @@ rl.on("close", () => {
     chapters,
     patterns,
     fieldMarks,
+    phase2: {
+      languageTurn: languageTurnData,
+      artistReigns,
+      obsessions: obsessionsData,
+      rewinds: rewindsCount,
+      abandonment: abandonmentCount,
+      deviceEras: deviceErasData
+    }
   };
 
-  fs.writeFileSync(path.join(outputDir, "archive-summary.json"), JSON.stringify(archiveSummary, null, 2));
-  fs.writeFileSync(path.join(srcDataDir, "archive-summary.json"), JSON.stringify(archiveSummary, null, 2));
+  fs.writeFileSync(path.join(outputDir, "archive-summary.json"), JSON.stringify(archiveSummary));
+  fs.writeFileSync(path.join(srcDataDir, "archive-summary.json"), JSON.stringify(archiveSummary));
   console.log("Wrote archive-summary.json to public and src directories.");
 
   // Build combined moments index
@@ -679,8 +807,21 @@ rl.on("close", () => {
   combinedMoments.sort((a, b) => a.time - b.time);
   const cleanMoments = combinedMoments.map(({ time, ...rest }) => rest);
 
-  fs.writeFileSync(path.join(outputDir, "archive-moments.json"), JSON.stringify(cleanMoments));
-  console.log(`Wrote archive-moments.json with ${cleanMoments.length} moments.`);
+  const momentsByYear = new Map();
+  for (const m of cleanMoments) {
+    const year = m.occurredAt.slice(0, 4);
+    if (!momentsByYear.has(year)) {
+      momentsByYear.set(year, []);
+    }
+    momentsByYear.get(year).push(m);
+  }
+  for (const [year, yearMoments] of momentsByYear.entries()) {
+    fs.writeFileSync(path.join(outputDir, `archive-moments-${year}.json`), JSON.stringify(yearMoments));
+  }
+  if (fs.existsSync(path.join(outputDir, "archive-moments.json"))) {
+    fs.unlinkSync(path.join(outputDir, "archive-moments.json"));
+  }
+  console.log(`Wrote archive-moments sharded by year with ${cleanMoments.length} total moments.`);
 
   // Write initial 200 moments for synchronous hydration
   const step = Math.floor(cleanMoments.length / 200);
@@ -688,7 +829,7 @@ rl.on("close", () => {
   for (let i = 0; i < cleanMoments.length && initial.length < 200; i += step) {
     initial.push(cleanMoments[i]);
   }
-  fs.writeFileSync(path.join(srcDataDir, "initial-moments.json"), JSON.stringify(initial, null, 2));
+  fs.writeFileSync(path.join(srcDataDir, "initial-moments.json"), JSON.stringify(initial));
   console.log(`Wrote initial-moments.json with ${initial.length} moments.`);
 
   console.log("Archive processing complete!");

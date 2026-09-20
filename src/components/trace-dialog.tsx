@@ -1,10 +1,11 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowRight, Clock, Footprints, Music2, ReceiptText, Sparkles, Tag, ExternalLink } from "lucide-react";
+import { ArrowDown, ArrowRight, Bookmark, Clock, Footprints, Music2, ReceiptText, Sparkles, Tag, ExternalLink } from "lucide-react";
 import { findTemporalConnections, formatTimeDistance, type TraceConnection } from "@/lib/lifetrace-analysis";
 import type { LifeMoment } from "@/lib/lifetrace-data";
 import { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useSavedTraces } from "@/hooks/useSavedTraces";
 
 export function TraceDialog({
   moment,
@@ -21,6 +22,7 @@ export function TraceDialog({
 }) {
   const prefersReducedMotion = useReducedMotion();
   const [history, setHistory] = useState<LifeMoment[]>([]);
+  const { isSaved, toggleTrace } = useSavedTraces();
 
   // When a new root moment is opened from outside, reset history
   useEffect(() => {
@@ -114,7 +116,17 @@ export function TraceDialog({
                   {currentMoment.kind === "music" ? <Music2 className="size-3" /> : <ReceiptText className="size-3" />}
                   {currentMoment.kind === "music" ? "Music Artifact" : "Transaction Artifact"}
                 </span>
-                <span className="font-mono text-[10px] text-muted-foreground">ID: {currentMoment.id}</span>
+                <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline-block">ID: {currentMoment.id}</span>
+                <button
+                  onClick={() => toggleTrace(currentMoment.id)}
+                  className={`ml-auto flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none ${
+                    isSaved(currentMoment.id) ? "text-ochre hover:text-ochre/80" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-label={isSaved(currentMoment.id) ? "Unsave trace" : "Save trace"}
+                >
+                  <Bookmark className="size-3" fill={isSaved(currentMoment.id) ? "currentColor" : "none"} />
+                  {isSaved(currentMoment.id) ? "Saved" : "Save"}
+                </button>
               </div>
 
               <DialogTitle className="mt-4 font-display text-4xl font-normal leading-[1.05] md:text-5xl">
@@ -193,12 +205,21 @@ export function TraceDialog({
                   >
                     {/* Directional indicator */}
                     <div className="flex flex-col items-center gap-1 py-2 text-muted-foreground md:px-3 md:py-0">
-                      <div className="hidden md:block">
-                        <ArrowRight className="size-4" />
-                      </div>
-                      <div className="block md:hidden">
-                        <ArrowDown className="size-4" />
-                      </div>
+                      {item.hasDayPrecision ? (
+                        <div className="flex h-4 items-center md:h-auto md:w-4">
+                          {/* Dashed line for day precision */}
+                          <div className="h-full w-px border-l border-dashed border-muted-foreground md:h-px md:w-full md:border-l-0 md:border-t"></div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="hidden md:block">
+                            <ArrowRight className="size-4" />
+                          </div>
+                          <div className="block md:hidden">
+                            <ArrowDown className="size-4" />
+                          </div>
+                        </>
+                      )}
                       <span className="whitespace-nowrap font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
                         {item.timeDistanceFormatted}
                       </span>
@@ -207,7 +228,7 @@ export function TraceDialog({
                     {/* Interactive trace card */}
                     <button
                       onClick={() => handleSelectNext(item.moment)}
-                      className="group flex w-full flex-col justify-between border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-1 hover:border-foreground hover:shadow-paper focus-visible:outline-2 focus-visible:outline-ring md:w-52"
+                      className="group flex w-full flex-col justify-between border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-1 hover:border-foreground hover:shadow-paper focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none md:w-52"
                     >
                       <div>
                         <div className="flex items-center justify-between">

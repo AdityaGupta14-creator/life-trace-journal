@@ -64,6 +64,8 @@ function MomentsPage() {
   const [ascending, setAscending] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMoment, setSelectedMoment] = useState<LifeMoment | null>(null);
+  
+  const navigate = Route.useNavigate();
 
   // Sync state if search params change
   useEffect(() => {
@@ -72,6 +74,20 @@ function MomentsPage() {
     if (search.startDate !== undefined) setStartDate(search.startDate);
     if (search.endDate !== undefined) setEndDate(search.endDate);
   }, [search.query, search.filter, search.startDate, search.endDate]);
+
+  // Sync back to URL
+  useEffect(() => {
+    const newSearch: Record<string, string> = {};
+    if (deferredQuery) newSearch.query = deferredQuery;
+    if (filter !== "All") newSearch.filter = filter;
+    if (startDate) newSearch.startDate = startDate;
+    if (endDate) newSearch.endDate = endDate;
+    
+    navigate({
+      search: newSearch,
+      replace: true,
+    });
+  }, [deferredQuery, filter, startDate, endDate, navigate]);
 
   // Background fetch full moments dataset
   useEffect(() => {
@@ -86,7 +102,7 @@ function MomentsPage() {
       ...moment,
       _searchIndex: `${moment.title} ${moment.subtitle} ${moment.detail} ${moment.category} ${
         moment.paymentMethod || ""
-      } ${moment.metadata?.album || ""} ${moment.metadata?.platform || ""}`.toLowerCase(),
+      } ${moment.metadata?.album || ""} ${moment.metadata?.platform || ""} ${moment.note || ""}`.toLowerCase(),
     }));
   }, [allMoments]);
 
@@ -312,7 +328,7 @@ function MomentsPage() {
 
                     {/* Card Footer / Receipt details */}
                     <div className="mt-6 border-t border-dashed border-border pt-3">
-                      <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground">
+                        <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground">
                         <span>{formattedDate}</span>
                         {moment.value !== undefined ? (
                           <span className="font-medium text-foreground">
@@ -322,6 +338,12 @@ function MomentsPage() {
                           <span>{moment.completed ? "Listened" : "Skipped"}</span>
                         )}
                       </div>
+                      
+                      {moment.note && (
+                        <div className="mt-2 text-xs text-muted-foreground bg-muted/20 p-2 border-l-2 border-border italic">
+                          "{moment.note}"
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center justify-between">
                         <span className="font-mono text-[8px] text-muted-foreground">
                           ID: {moment.id}

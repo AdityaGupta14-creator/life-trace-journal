@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, forwardRef, CSSProperties } from "react";
+import { FixedSizeList as List } from "react-window";
 import { ArrowRight, Calendar, Filter, Footprints, Music2, ReceiptText, Sparkles } from "lucide-react";
 import { LifeTraceShell, PageIntro, SectionLabel } from "@/components/lifetrace-shell";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,8 @@ function JourneyPage() {
   const [moments, setMoments] = useState<LifeMoment[]>(initialMoments);
   const [selectedTraceMoment, setSelectedTraceMoment] = useState<LifeMoment | null>(null);
 
+  const navigate = Route.useNavigate();
+
   // Background fetch full moments
   useEffect(() => {
     fetchAllMoments().then((data) => {
@@ -98,6 +101,20 @@ function JourneyPage() {
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const observer = new ResizeObserver((entries) => {
+        setContainerWidth(entries[0]?.contentRect.width ?? 800);
+      });
+      observer.observe(containerRef.current);
+      return () => observer.disconnect();
+    }
+    return () => {};
+  }, []);
+
   // Default active index: choose 2017 or a dense month
   const defaultIndex = useMemo(() => {
     if (!points.length) return 0;
@@ -127,6 +144,19 @@ function JourneyPage() {
     if (!activePoint) return null;
     return generatePeriodSummary(activePoint.key, moments, activePoint);
   }, [activePoint, moments]);
+
+  // Sync back to URL
+  useEffect(() => {
+    const newSearch: Record<string, string> = {};
+    if (activePoint?.key) newSearch.period = activePoint.key;
+    if (scale !== "month") newSearch.scale = scale;
+    if (kind !== "all") newSearch.kind = kind;
+    
+    navigate({
+      search: newSearch,
+      replace: true,
+    });
+  }, [activePoint?.key, scale, kind, navigate]);
 
   const maxCount = Math.max(...points.map((p) => p.count), 1);
 
@@ -244,74 +274,89 @@ function JourneyPage() {
 
               {/* Scrollable Bar Cluster */}
               <div
-                className="flex h-[390px] items-end gap-1 overflow-x-auto border-b border-border px-2 pt-16 pb-2"
+                ref={containerRef}
+                className="h-[390px] w-full border-b border-border pt-16 pb-2"
                 role="listbox"
                 aria-label="Temporal activity clusters"
               >
-                {points.map((point, index) => {
-                  const isSelected = index === activeIndex;
-                  const isHovered = index === hoveredIndex;
-                  const hasTx = point.transactions > 0;
-                  const heightPercent = Math.max(10, (point.count / maxCount) * 82);
+                <List
+                  height={310} // 390 - pt-16 (64px) - pb-2 (8px) = 318 roughly. We use 310
+                  itemCount={points.length}
+                  itemSize={scale === "day" ? 12 : scale === "month" ? 28 : 64}
+                  layout="horizontal"
+                  width={containerWidth}
+                  innerElementType={forwardRef<HTMLDivElement, React.HTMLProps<HTMLDivElement>>(
+                    ({ style, ...rest }, ref) => (
+                      <div ref={ref} style={{ ...style, display: "flex", alignItems: "flex-end", height: "100%" }} {...rest} />
+                    )
+                  )}
+                >
+                  {({ index, style }: { index: number; style: CSSProperties }) => {
+                    const point = points[index];
+                    if (!point) return null;
+                    const isSelected = index === activeIndex;
+                    const isHovered = index === hoveredIndex;
+                    const hasTx = point.transactions > 0;
+                    const heightPercent = Math.max(10, (point.count / maxCount) * 82);
 
-                  return (
-                    <button
-                      key={point.key}
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => setActiveIndex(index)}
-                      onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                      onFocus={() => setHoveredIndex(index)}
-                      onBlur={() => setHoveredIndex(null)}
-                      className="group relative flex h-full min-w-7 flex-1 items-end justify-center focus-visible:outline-2 focus-visible:outline-ring"
-                      title={`${point.label}: ${point.count.toLocaleString()} traces (${point.music.toLocaleString()} music, ${point.transactions.toLocaleString()} receipts)`}
-                    >
-                      {/* Floating tooltip on hover */}
-                      <div
-                        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-150 ${
-                          isHovered
-                            ? "flex flex-col items-center opacity-100"
-                            : "hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100"
-                        }`}
-                        style={{ bottom: `calc(${heightPercent}% + 8px)` }}
-                      >
-                        <div className="rounded border border-foreground bg-popover px-2.5 py-1.5 shadow-paper text-left whitespace-nowrap min-w-[110px]">
-                          <div className="font-mono text-[10px] font-bold text-foreground">
-                            {point.label}
+                    return (
+                      <div style={style} className="px-px">
+                        <button
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => setActiveIndex(index)}
+                          onMouseEnter={() => setHoveredIndex(index)}
+                          onMouseLeave={() => setHoveredIndex(null)}
+                          onFocus={() => setHoveredIndex(index)}
+                          onBlur={() => setHoveredIndex(null)}
+                          className="group relative flex h-full w-full items-end justify-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none"
+                          title={`${point.label}: ${point.count.toLocaleString()} traces (${point.music.toLocaleString()} music, ${point.transactions.toLocaleString()} receipts)`}
+                        >
+                          {/* Floating tooltip on hover */}
+                          <div
+                            className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-150 ${
+                              isHovered
+                                ? "flex flex-col items-center opacity-100"
+                                : "hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100"
+                            }`}
+                            style={{ bottom: `calc(${heightPercent}% + 8px)` }}
+                          >
+                            <div className="rounded border border-foreground bg-popover px-2.5 py-1.5 shadow-paper text-left whitespace-nowrap min-w-[110px]">
+                              <div className="font-mono text-[10px] font-bold text-foreground">
+                                {point.label}
+                              </div>
+                              <div className="font-mono text-[10px] text-foreground/85 mt-0.5">
+                                {point.count.toLocaleString()} total
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] border-t border-border pt-1">
+                                <span className="text-dusty-blue font-medium">{point.music.toLocaleString()} m</span>
+                                <span className="text-ochre font-medium">{point.transactions.toLocaleString()} tx</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="font-mono text-[10px] text-foreground/85 mt-0.5">
-                            {point.count.toLocaleString()} total
-                          </div>
-                          <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] border-t border-border pt-1">
-                            <span className="text-dusty-blue font-medium">{point.music.toLocaleString()} m</span>
-                            <span className="text-ochre font-medium">{point.transactions.toLocaleString()} tx</span>
-                          </div>
-                        </div>
-                        <div className="size-1.5 -mt-1 rotate-45 border-b border-r border-foreground bg-popover" />
+
+                          <div
+                            className="w-full bg-dusty-blue/70 transition-all group-hover:bg-dusty-blue"
+                            style={{ height: `${heightPercent}%` }}
+                          />
+                          {hasTx && (
+                            <div
+                              className="absolute bottom-0 w-full bg-ochre transition-all group-hover:bg-ochre/80"
+                              style={{
+                                height: `${Math.max(4, (point.transactions / maxCount) * 82)}%`,
+                              }}
+                            />
+                          )}
+                          {isSelected && (
+                            <div className="absolute -bottom-2.5 size-1.5 rounded-full bg-foreground" />
+                          )}
+                        </button>
                       </div>
-
-                      <div
-                        className={`w-full max-w-8 transition-all ${
-                          isSelected
-                            ? "bg-foreground ring-2 ring-foreground/40"
-                            : isHovered
-                            ? hasTx
-                              ? "bg-ochre brightness-110 ring-1 ring-ochre"
-                              : "bg-dusty-blue brightness-110 ring-1 ring-dusty-blue"
-                            : hasTx
-                            ? "bg-ochre/70 group-hover:bg-ochre"
-                            : "bg-dusty-blue/50 group-hover:bg-dusty-blue"
-                        }`}
-                        style={{ height: `${heightPercent}%` }}
-                      />
-                      <span className="sr-only">
-                        {point.label}, {point.count.toLocaleString()} traces ({point.music.toLocaleString()} music, {point.transactions.toLocaleString()} receipts)
-                      </span>
-                    </button>
-                  );
-                })}
+                    );
+                  }}
+                </List>
               </div>
+
 
               {/* Timeline Bounds */}
               <div className="mt-3 flex justify-between font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">

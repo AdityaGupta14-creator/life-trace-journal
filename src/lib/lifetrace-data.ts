@@ -9,12 +9,18 @@ export type MomentCategory =
   | "Subscriptions"
   | "Household"
   | "Health"
-  | "Other";
+  | "Other"
+  | "Online Shopping"
+  | "Travel"
+  | "Entertainment"
+  | "Health & Fitness"
+  | "Unrecorded";
 
 export type LifeMoment = {
   id: string;
   kind: MomentKind;
   category: MomentCategory;
+  timePrecision?: "minute" | "day";
   occurredAt: string;
   title: string;
   subtitle: string;
@@ -61,10 +67,15 @@ export async function fetchAllMoments(): Promise<LifeMoment[]> {
   loadPromise = (async () => {
     try {
       if (typeof window !== "undefined") {
-        const res = await fetch("/data/archive-moments.json");
-        if (res.ok) {
-          const data = await res.json();
-          allMomentsCache = data as LifeMoment[];
+        const years = Array.from({ length: 12 }, (_, i) => 2013 + i);
+        const fetches = years.map(year => 
+          fetch(`/data/archive-moments-${year}.json`).then(res => res.ok ? res.json() : [])
+        );
+        const results = await Promise.all(fetches);
+        const allData = results.flat();
+        
+        if (allData.length > 0) {
+          allMomentsCache = allData as LifeMoment[];
           lifeMoments = allMomentsCache;
           return allMomentsCache;
         }

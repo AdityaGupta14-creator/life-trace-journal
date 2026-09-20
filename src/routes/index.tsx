@@ -237,7 +237,7 @@ function DiscoverPage() {
       {/* 03 · Chapters Section */}
       <section className="bg-ink text-paper">
         <div className="mx-auto max-w-[1440px] px-5 py-20 md:px-10 md:py-32">
-          <SectionLabel>03 · Chapters</SectionLabel>
+          <SectionLabel className="text-paper/70 before:bg-paper/30">03 · Chapters</SectionLabel>
           <div className="grid gap-14 lg:grid-cols-[0.7fr_1.3fr]">
             <div>
               <h2 className="font-display text-6xl leading-[0.9] md:text-8xl">

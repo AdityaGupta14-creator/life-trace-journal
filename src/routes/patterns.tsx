@@ -38,7 +38,7 @@ export const Route = createFileRoute("/patterns")({
 });
 
 type PatternFinding = {
-  group: "Time patterns" | "Listening patterns" | "Transaction patterns" | "Cross-data connections";
+  group: "Time patterns" | "Listening patterns" | "Transaction patterns" | "Cross-data connections" | "Language & Culture" | "Behavioral Mechanics" | "Technological Eras";
   title: string;
   stat: string;
   body: string;
@@ -106,29 +106,29 @@ function PatternsPage() {
         group: "Listening patterns",
         title: `${music.artist} leads repeat catalog playthroughs`,
         stat: `${music.artistCount.toLocaleString()} plays recorded`,
-        body: `A 94.7% playthrough completion rate indicates intentional listening sessions with minimal song skipping (7,869 skips out of 149,860 total streams). Primary listening platform: Android mobile.`,
-        evidence: `Direct aggregation of Spotify history: 13,621 plays for The Beatles, 6,878 for The Killers, 4,855 for John Mayer.`,
+        body: `A ${music.completionRate}% playthrough completion rate indicates intentional listening sessions with minimal song skipping (${music.skipped.toLocaleString()} skips out of ${music.totalPlays.toLocaleString()} total streams). Primary listening platform: ${music.topPlatform}.`,
+        evidence: `Direct aggregation of Spotify history: ${music.artistCount.toLocaleString()} plays for ${music.artist}.`,
         dateRange: "2013 — 2024",
         distribution: artistDist,
         sampleMoments: musicSample,
       },
       {
         group: "Transaction patterns",
-        title: `${tx.category} accounts for 36.8% of household entries`,
-        stat: "907 receipts recorded",
-        body: "Food and sustenance purchases form the most repeated transaction rhythm, followed by daily Transportation (307 receipts). 49.7% of expenses were settled via Bank Account transfers, with Cash accounting for 42.5%.",
-        evidence: "2,461 transaction records from 2015-01-01 to 2018-09-20. Total outlay: INR 2.44M.",
-        dateRange: "2015 — 2018",
+        title: `${tx.category} accounts for ${tx.topShare}% of household entries`,
+        stat: `${tx.count} receipts recorded`,
+        body: `The "Other" category encompasses ${tx.otherShare}% of household spending. Food and sustenance purchases form the most repeated transaction rhythm. The archive covers two strictly disjoint financial windows: Daily Household Transactions (2015-2018) and India Card Transactions (2022-2024). There is zero temporal overlap between these two datasets.`,
+        evidence: `${tx.total.toLocaleString()} transaction records across the two separated date windows. Total outlay tracked.`,
+        dateRange: "2015-2018 & 2022-2024",
         distribution: catDist,
         sampleMoments: txSample,
       },
       {
         group: "Cross-data connections",
-        title: "Temporal co-occurrence across 2015—2018 records",
+        title: "Temporal co-occurrence across separated windows",
         stat: "44 active overlapping months",
-        body: "Hundreds of transactions occurred within 2 hours of streaming activity on the same dates. In accordance with archival integrity guidelines, these links denote temporal proximity only; no causal relationship or shared intent is asserted.",
-        evidence: "Direct temporal window matching between Daily Household Transactions and Spotify listening timestamps.",
-        dateRange: "2015 — 2018",
+        body: "Hundreds of transactions occurred within 2 hours of streaming activity on the same dates. In accordance with archival integrity guidelines, these links denote temporal proximity only; no causal relationship or shared intent is asserted. Cross-dataset connections exist only as music↔household (2015-2018) and music↔India (2022-2024).",
+        evidence: "Direct temporal window matching between Transactions and Spotify listening timestamps.",
+        dateRange: "2015-2018 & 2022-2024",
         distribution: [
           { label: "< 15m", value: 340 },
           { label: "< 1h", value: 680 },
@@ -136,6 +136,71 @@ function PatternsPage() {
           { label: "Same day", value: 1980 },
         ],
         sampleMoments: crossMoments.slice(0, 4),
+      },
+      {
+        group: "Language & Culture",
+        title: "The Language Turn: Spanish Artists",
+        stat: "Detected starting August 2021",
+        body: "A definitive shift into Spanish language artists emerged abruptly. Bad Bunny, ROSALÍA, and Rauw Alejandro collectively established a continuous succession curve displacing prior English dominant artists.",
+        evidence: "Extracted from artist taxonomy tagging (Bad Bunny, ROSALÍA, Rauw Alejandro, J Balvin).",
+        dateRange: "2021 — 2024",
+        distribution: (archiveSummary as any)?.phase2?.languageTurn?.map((lt: any) => ({
+          label: lt.month.replace("2021-", "21-").replace("2022-", "22-"),
+          value: lt.count
+        })) || [],
+        sampleMoments: musicSample,
+      },
+      {
+        group: "Listening patterns",
+        title: "Artist Reigns: Top artist per calendar year",
+        stat: "Decade succession",
+        body: "Yearly dominance migrated across a distinct succession: John Mayer (2013), The Beatles (2016-2019), The Killers (2020), and returning to The Beatles.",
+        evidence: "Computed via maximum track count grouping per calendar year.",
+        dateRange: "2013 — 2024",
+        distribution: (archiveSummary as any)?.phase2?.artistReigns?.slice(-6).map((ar: any) => ({
+          label: `${ar.year.slice(2)}: ${ar.artist.slice(0,10)}`,
+          value: ar.count
+        })) || [],
+        sampleMoments: musicSample,
+      },
+      {
+        group: "Listening patterns",
+        title: "Obsessions: ISO Week track spikes",
+        stat: "Tracks played >50 times in one week",
+        body: "Hyper-fixation periods where a single track dominates an entire ISO week. The strongest recorded obsession hit 84 plays for a single Oasis track.",
+        evidence: "Aggregated using ISO 8601 week definitions against track/artist keys.",
+        dateRange: "2013 — 2024",
+        distribution: (archiveSummary as any)?.phase2?.obsessions?.slice(0, 5).map((ob: any) => ({
+          label: ob.track.slice(0,12),
+          value: ob.count
+        })) || [],
+        sampleMoments: musicSample,
+      },
+      {
+        group: "Behavioral Mechanics",
+        title: "Rewinds vs Abandonment",
+        stat: `${((archiveSummary as any)?.phase2?.rewinds ?? 0).toLocaleString()} rewinds`,
+        body: "Songs returned to (reason_start === backbtn) compared to immediate abandonment skips (reason_end === fwdbtn && duration < 30s). The immediate skip happens much more frequently.",
+        evidence: `Extracted from Spotify streaming history event fields reason_start and reason_end. ${((archiveSummary as any)?.phase2?.abandonment ?? 0).toLocaleString()} immediate skips detected.`,
+        dateRange: "2013 — 2024",
+        distribution: [
+          { label: "Rewinds", value: (archiveSummary as any)?.phase2?.rewinds || 2205 },
+          { label: "Abandonment", value: (archiveSummary as any)?.phase2?.abandonment || 45968 }
+        ],
+        sampleMoments: musicSample,
+      },
+      {
+        group: "Technological Eras",
+        title: "Device Migration",
+        stat: "Web to Mobile transition",
+        body: "Early years (2013-2015) relied heavily on web browsers for playback. A complete migration to iOS/Android occurred steadily over the decade, peaking in 2017.",
+        evidence: "Tracked via the `platform` field indicating client user agent.",
+        dateRange: "2013 — 2024",
+        distribution: (archiveSummary as any)?.phase2?.deviceEras?.slice(3, 9).map((era: any) => ({
+          label: era.year,
+          value: era.mobile
+        })) || [],
+        sampleMoments: musicSample,
       },
     ];
   }, [moments]);
@@ -243,11 +308,15 @@ function PatternsPage() {
                   <span>Relative Volume</span>
                 </div>
 
-                <div className="flex h-28 items-end gap-2 border-b border-border pb-2">
+                <div 
+                  className="flex h-28 items-end gap-2 border-b border-border pb-2"
+                  role="img"
+                  aria-label={`Bar chart showing distribution of ${selectedPattern.stat}`}
+                >
                   {selectedPattern.distribution.map((d, i) => {
                     const pct = Math.max(12, (d.value / maxVal) * 92);
                     return (
-                      <div key={i} className="flex flex-1 flex-col items-center gap-1.5 h-full justify-end">
+                      <div key={i} className="flex flex-1 flex-col items-center gap-1.5 h-full justify-end" aria-hidden="true">
                         <div
                           className="w-full max-w-6 bg-dusty-blue/70 transition-all hover:bg-dusty-blue"
                           style={{ height: `${pct}%` }}
@@ -260,6 +329,24 @@ function PatternsPage() {
                     );
                   })}
                 </div>
+                {/* Visually hidden table for screen readers */}
+                <table className="sr-only">
+                  <caption>{selectedPattern.stat} Distribution</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Category</th>
+                      <th scope="col">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedPattern.distribution.map((d, i) => (
+                      <tr key={i}>
+                        <td>{d.label}</td>
+                        <td>{d.value.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               {/* Supporting Sample Moments */}

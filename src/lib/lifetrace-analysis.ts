@@ -48,6 +48,7 @@ export type TraceConnection = {
   timeDistanceFormatted: string;
   relationshipLabel: string;
   direction: "earlier" | "later" | "concurrent";
+  hasDayPrecision?: boolean;
 };
 
 const countBy = (values: string[]) =>
@@ -139,21 +140,55 @@ export const aggregateByHour = (moments: LifeMoment[]) =>
     (d) => `${String(d.getUTCHours()).padStart(2, "0")}:00`
   );
 
+export function getGlobalStats() {
+  if (!archiveSummary) return null;
+  
+  const topArtist = archiveSummary.topArtists[0] || { artist: "The Beatles", count: 13621 };
+  const topCategory = archiveSummary.categories[0] || { category: "Food", count: 907 };
+  const totalPlays = archiveSummary.scale.music || 149860;
+  const skippedPlays = 7869; // from archive
+  const completedPlays = totalPlays - skippedPlays;
+  const completionRate = Math.round((completedPlays / totalPlays) * 1000) / 10;
+  
+  const totalTx = archiveSummary.scale.householdTransactions;
+  const topCatShare = Math.round((topCategory.count / totalTx) * 1000) / 10;
+  
+  // Find "Other" category to get its exact share
+  const otherCat = archiveSummary.categories.find(c => c.category === "Other") || { count: 126 };
+  const otherShare = Math.round((otherCat.count / totalTx) * 1000) / 10;
+
+  return {
+    topArtist: topArtist.artist,
+    topArtistCount: topArtist.count,
+    totalPlays,
+    skippedPlays,
+    completedPlays,
+    completionRate,
+    topPlatform: archiveSummary.platforms[0]?.platform ?? "android",
+    topCategory: topCategory.category,
+    topCategoryCount: topCategory.count,
+    topCategoryShare: topCatShare,
+    otherCategoryShare: otherShare,
+    householdTxTotal: totalTx,
+    indiaTxTotal: archiveSummary.scale.indiaTransactions
+  };
+}
+
 export function analyzeListeningPatterns(moments: LifeMoment[]) {
-  const music = moments.filter((moment) => moment.kind === "music");
-  if (!music.length && archiveSummary) {
-    const top = archiveSummary.topArtists[0];
+  const global = getGlobalStats();
+  if (global) {
     return {
-      artist: top?.artist ?? "The Beatles",
-      artistCount: top?.count ?? 13621,
-      completed: archiveSummary.scale.music - 7869,
-      skipped: 7869,
-      completionRate: 94.7,
-      topPlatform: archiveSummary.platforms[0]?.platform ?? "android",
-      totalPlays: archiveSummary.scale.music,
+      artist: global.topArtist,
+      artistCount: global.topArtistCount,
+      completed: global.completedPlays,
+      skipped: global.skippedPlays,
+      completionRate: global.completionRate,
+      topPlatform: global.topPlatform,
+      totalPlays: global.totalPlays,
     };
   }
 
+  const music = moments.filter((moment) => moment.kind === "music");
   const [artist, artistCount] = topEntry(countBy(music.map((moment) => moment.subtitle)));
   const completed = music.filter((moment) => moment.completed).length;
   return {
@@ -188,17 +223,19 @@ export function analyzeTimePatterns(moments: LifeMoment[]) {
 }
 
 export function analyzeTransactionPatterns(moments: LifeMoment[]) {
+  const global = getGlobalStats();
   const transactions = moments.filter((moment) => moment.kind === "transaction");
-  if (!transactions.length && archiveSummary) {
-    const topCat = archiveSummary.categories[0];
-    const topMode = archiveSummary.paymentModes[0];
+  
+  if (global) {
     return {
-      category: topCat?.category ?? "Food",
-      count: topCat?.count ?? 907,
-      paymentMethod: topMode?.mode ?? "Saving Bank account 1",
-      paymentCount: topMode?.count ?? 1223,
-      total: 2461,
+      category: global.topCategory,
+      count: global.topCategoryCount,
+      paymentMethod: archiveSummary?.paymentModes[0]?.mode ?? "Saving Bank account 1",
+      paymentCount: archiveSummary?.paymentModes[0]?.count ?? 1223,
+      total: global.householdTxTotal,
       currency: "INR",
+      otherShare: global.otherCategoryShare,
+      topShare: global.topCategoryShare
     };
   }
 
@@ -215,26 +252,34 @@ export function analyzeTransactionPatterns(moments: LifeMoment[]) {
     paymentCount,
     total,
     currency: transactions[0]?.currency ?? "INR",
+    otherShare: 0,
+    topShare: 0
   };
 }
 
-export function formatTimeDistance(targetIso: string, baseIso: string): {
+export function formatTimeDistance(target: LifeMoment, base: LifeMoment): {
   distanceMs: number;
   formatted: string;
   direction: "earlier" | "later" | "concurrent";
+  hasDayPrecision: boolean;
 } {
-  const t1 = new Date(baseIso).getTime();
-  const t2 = new Date(targetIso).getTime();
+  const t1 = new Date(base.occurredAt).getTime();
+  const t2 = new Date(target.occurredAt).getTime();
   const diffMs = t2 - t1;
   const absMs = Math.abs(diffMs);
   const direction = diffMs > 0 ? "later" : diffMs < 0 ? "earlier" : "concurrent";
+
+  const hasDayPrecision = target.timePrecision === "day" || base.timePrecision === "day";
 
   const minutes = Math.round(absMs / 60000);
   const hours = Math.round(absMs / 3600000);
   const days = Math.round(absMs / 86400000);
 
   let formatted = "same moment";
-  if (absMs < 60000) {
+  
+  if (hasDayPrecision && days < 1) {
+    formatted = "same day — exact time not recorded";
+  } else if (absMs < 60000) {
     formatted = "less than a minute";
   } else if (minutes < 60) {
     formatted = `${minutes} min`;
@@ -246,8 +291,9 @@ export function formatTimeDistance(targetIso: string, baseIso: string): {
 
   return {
     distanceMs: absMs,
-    formatted: direction === "concurrent" ? formatted : `${formatted} ${direction}`,
+    formatted: (direction === "concurrent" || (hasDayPrecision && days < 1)) ? formatted : `${formatted} ${direction}`,
     direction,
+    hasDayPrecision,
   };
 }
 
@@ -255,12 +301,13 @@ export function describeTemporalRelationship(
   candidate: LifeMoment,
   anchor: LifeMoment
 ): string {
-  const { distanceMs } = formatTimeDistance(candidate.occurredAt, anchor.occurredAt);
+  const { distanceMs, hasDayPrecision } = formatTimeDistance(candidate, anchor);
   const anchorDate = new Date(anchor.occurredAt).toISOString().slice(0, 10);
   const candDate = new Date(candidate.occurredAt).toISOString().slice(0, 10);
 
-  if (distanceMs < 15 * 60000) return "within 15 minutes";
-  if (distanceMs < 60 * 60000) return "same hour";
+  if (hasDayPrecision && anchorDate === candDate) return "same day — exact time not recorded";
+  if (!hasDayPrecision && distanceMs < 15 * 60000) return "within 15 minutes";
+  if (!hasDayPrecision && distanceMs < 60 * 60000) return "same hour";
   if (anchorDate === candDate) return "same day";
   if (distanceMs <= 7 * 86400000) return "same week";
   if (anchor.kind === candidate.kind) return `same archive category (${candidate.kind})`;
@@ -278,9 +325,9 @@ export function findTemporalConnections(
   const candidates = moments
     .filter((candidate) => candidate.id !== moment.id)
     .map((candidate) => {
-      const { distanceMs, formatted, direction } = formatTimeDistance(
-        candidate.occurredAt,
-        moment.occurredAt
+      const { distanceMs, formatted, direction, hasDayPrecision } = formatTimeDistance(
+        candidate,
+        moment
       );
       const relationshipLabel = describeTemporalRelationship(candidate, moment);
       return {
@@ -289,6 +336,7 @@ export function findTemporalConnections(
         timeDistanceFormatted: formatted,
         relationshipLabel,
         direction,
+        hasDayPrecision,
       };
     })
     .filter((item) => item.timeDistanceMs <= maxMs)
@@ -299,9 +347,9 @@ export function findTemporalConnections(
     const nearest = moments
       .filter((candidate) => candidate.id !== moment.id)
       .map((candidate) => {
-        const { distanceMs, formatted, direction } = formatTimeDistance(
-          candidate.occurredAt,
-          moment.occurredAt
+        const { distanceMs, formatted, direction, hasDayPrecision } = formatTimeDistance(
+          candidate,
+          moment
         );
         return {
           moment: candidate,
@@ -309,6 +357,7 @@ export function findTemporalConnections(
           timeDistanceFormatted: formatted,
           relationshipLabel: "nearest recorded in archive",
           direction,
+          hasDayPrecision,
         };
       })
       .sort((a, b) => a.timeDistanceMs - b.timeDistanceMs);
@@ -442,9 +491,15 @@ export function generatePeriodSummary(
     transactionCount,
     patterns: [
       `${musicCount.toLocaleString()} music moments in period`,
-      `${transactionCount.toLocaleString()} receipts registered`,
       topArtist !== "None" ? `Dominant artist: ${topArtist}` : "Varied listening catalogue",
-      topCategory !== "None" ? `Dominant transaction category: ${topCategory}` : "No transactions",
+      ...(transactionCount > 0
+        ? [
+            `${transactionCount.toLocaleString()} receipts registered`,
+            topCategory !== "None"
+              ? `Dominant transaction category: ${topCategory}`
+              : "Receipts registered across varied categories",
+          ]
+        : ["No transactions"]),
     ],
     narrative: narrativeParts.join(" "),
     representativeMoments: periodMoments.slice(0, 10),

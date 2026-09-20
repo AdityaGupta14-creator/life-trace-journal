@@ -66,7 +66,7 @@ export function LifeField({
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         className="absolute inset-0 h-full w-full"
-        role="img"
+        role="group"
         aria-label="Aggregated music and transaction activity across 2013 to 2024"
       >
         <defs>

@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Archive, Compass, Footprints, Grid2X2, Search } from "lucide-react";
+import { Archive, Bookmark, Compass, Footprints, Grid2X2, Search } from "lucide-react";
 import type { ReactNode } from "react";
+import { useSavedTraces } from "@/hooks/useSavedTraces";
 
 const links = [
   { to: "/", label: "Discover", icon: Compass },
@@ -11,6 +12,8 @@ const links = [
 
 export function LifeTraceShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { savedTraces } = useSavedTraces();
+  
   return <div className="min-h-screen bg-background text-foreground">
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex h-17 max-w-[1440px] items-center justify-between px-5 md:px-10">
@@ -21,7 +24,15 @@ export function LifeTraceShell({ children }: { children: ReactNode }) {
         <nav className="hidden items-center gap-8 md:flex" aria-label="Primary navigation">
           {links.map(({ to, label }) => <Link key={to} to={to} className={`border-b py-1 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring ${pathname === to ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</Link>)}
         </nav>
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Archive 01 / 04</span>
+        <div className="flex items-center gap-4">
+          {savedTraces.length > 0 && (
+            <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-ochre">
+              <Bookmark className="size-3" />
+              <span>{savedTraces.length} Saved</span>
+            </span>
+          )}
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hidden sm:inline-block">Archive 01 / 04</span>
+        </div>
       </div>
     </header>
     <main className="pb-24 md:pb-0">{children}</main>
@@ -38,4 +49,4 @@ export function PageIntro({ index, eyebrow, title, children }: { index: string; 
   </section>;
 }
 
-export function SectionLabel({ children }: { children: ReactNode }) { return <div className="mb-8 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground before:h-px before:w-8 before:bg-border">{children}</div>; }
+export function SectionLabel({ children, className = "text-muted-foreground before:bg-border" }: { children: ReactNode; className?: string }) { return <div className={`mb-8 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.2em] before:h-px before:w-8 ${className}`}>{children}</div>; }
