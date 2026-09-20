@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useDeferredValue } from "react";
 import { ArrowDownUp, ChevronLeft, ChevronRight, Filter, Music2, ReceiptText, Search, X } from "lucide-react";
 import { LifeTraceShell, PageIntro } from "@/components/lifetrace-shell";
 import { TraceDialog } from "@/components/trace-dialog";
@@ -57,6 +57,7 @@ function MomentsPage() {
   const search = Route.useSearch();
   const [allMoments, setAllMoments] = useState<LifeMoment[]>(initialMoments);
   const [query, setQuery] = useState(search.query || "");
+  const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<(typeof filters)[number]>(search.filter || "All");
   const [startDate, setStartDate] = useState(search.startDate || "");
   const [endDate, setEndDate] = useState(search.endDate || "");
@@ -72,18 +73,28 @@ function MomentsPage() {
     if (search.endDate !== undefined) setEndDate(search.endDate);
   }, [search.query, search.filter, search.startDate, search.endDate]);
 
-  // Background fetch full moments dataset (all 11,878 transactions + representative music)
+  // Background fetch full moments dataset
   useEffect(() => {
     fetchAllMoments().then((data) => {
       setAllMoments(data);
     });
   }, []);
 
-  // Filter and search against normalized indexed structures
-  const filteredMoments = useMemo(() => {
-    const q = query.toLowerCase().trim();
+  // Performance Optimization: Pre-compute searchable string to avoid string alloc on every keystroke
+  const indexedMoments = useMemo(() => {
+    return allMoments.map((moment) => ({
+      ...moment,
+      _searchIndex: `${moment.title} ${moment.subtitle} ${moment.detail} ${moment.category} ${
+        moment.paymentMethod || ""
+      } ${moment.metadata?.album || ""} ${moment.metadata?.platform || ""}`.toLowerCase(),
+    }));
+  }, [allMoments]);
 
-    return allMoments.filter((moment) => {
+  // Filter and search against normalized indexed structures using deferred query
+  const filteredMoments = useMemo(() => {
+    const q = deferredQuery.toLowerCase().trim();
+
+    return indexedMoments.filter((moment) => {
       // Category / Type filter
       if (filter !== "All") {
         if (filter === "Transactions") {
@@ -100,16 +111,11 @@ function MomentsPage() {
       if (endDate && moment.occurredAt.slice(0, 10) > endDate) return false;
 
       // Text search
-      if (q) {
-        const text = `${moment.title} ${moment.subtitle} ${moment.detail} ${moment.category} ${
-          moment.paymentMethod || ""
-        } ${moment.metadata?.album || ""} ${moment.metadata?.platform || ""}`.toLowerCase();
-        if (!text.includes(q)) return false;
-      }
+      if (q && !moment._searchIndex.includes(q)) return false;
 
       return true;
     });
-  }, [allMoments, query, filter, startDate, endDate]);
+  }, [indexedMoments, deferredQuery, filter, startDate, endDate]);
 
   // Sort
   const sortedMoments = useMemo(() => {
