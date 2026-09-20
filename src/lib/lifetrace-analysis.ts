@@ -403,18 +403,24 @@ export function generateChapters(moments: LifeMoment[]): Chapter[] {
 
 export function generatePeriodSummary(
   periodKey: string,
-  moments: LifeMoment[]
+  moments: LifeMoment[],
+  aggregatePoint?: AggregatePoint
 ): PeriodSummary {
   const periodMoments = moments.filter((m) => m.occurredAt.startsWith(periodKey));
   const music = periodMoments.filter((m) => m.kind === "music");
   const transactions = periodMoments.filter((m) => m.kind === "transaction");
+
+  const totalCount = aggregatePoint?.count ?? periodMoments.length;
+  const musicCount = aggregatePoint?.music ?? music.length;
+  const transactionCount = aggregatePoint?.transactions ?? transactions.length;
+  const periodLabel = aggregatePoint?.label ?? periodKey;
 
   const topArtist = topEntry(countBy(music.map((m) => m.subtitle)))[0];
   const topCategory = topEntry(countBy(transactions.map((m) => m.category)))[0];
 
   const narrativeParts: string[] = [];
   narrativeParts.push(
-    `During ${periodKey}, the archive contains ${periodMoments.length} recorded moments, comprising ${music.length} music streams and ${transactions.length} transaction receipts.`
+    `During ${periodLabel}, the archive records ${totalCount.toLocaleString()} traces in total, comprising ${musicCount.toLocaleString()} music streams and ${transactionCount.toLocaleString()} financial receipts.`
   );
   if (music.length > 0 && topArtist !== "None") {
     narrativeParts.push(`Listening activity shows repeat plays for ${topArtist}.`);
@@ -426,17 +432,17 @@ export function generatePeriodSummary(
 
   return {
     key: periodKey,
-    label: periodKey,
+    label: periodLabel,
     dateRange: {
       start: periodMoments[0]?.occurredAt ?? periodKey,
       end: periodMoments[periodMoments.length - 1]?.occurredAt ?? periodKey,
     },
-    totalCount: periodMoments.length,
-    musicCount: music.length,
-    transactionCount: transactions.length,
+    totalCount,
+    musicCount,
+    transactionCount,
     patterns: [
-      `${music.length} music moments recorded`,
-      `${transactions.length} receipts registered`,
+      `${musicCount.toLocaleString()} music moments in period`,
+      `${transactionCount.toLocaleString()} receipts registered`,
       topArtist !== "None" ? `Dominant artist: ${topArtist}` : "Varied listening catalogue",
       topCategory !== "None" ? `Dominant transaction category: ${topCategory}` : "No transactions",
     ],

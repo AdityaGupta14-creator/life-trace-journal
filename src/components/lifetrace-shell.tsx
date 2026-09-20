@@ -24,7 +24,7 @@ export function LifeTraceShell({ children }: { children: ReactNode }) {
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Archive 01 / 04</span>
       </div>
     </header>
-    <main>{children}</main>
+    <main className="pb-24 md:pb-0">{children}</main>
     <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="Mobile navigation">
       {links.map(({ to, label, icon: Icon }) => <Link key={to} to={to} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[10px] ${pathname === to ? "text-foreground" : "text-muted-foreground"}`}><Icon className="size-4" /><span>{label}</span></Link>)}
     </nav>

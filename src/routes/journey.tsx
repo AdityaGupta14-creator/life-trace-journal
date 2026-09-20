@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { ArrowRight, Calendar, Filter, Footprints, Music2, ReceiptText, Sparkles } from "lucide-react";
 import { LifeTraceShell, PageIntro, SectionLabel } from "@/components/lifetrace-shell";
@@ -22,6 +22,11 @@ import {
 } from "@/lib/lifetrace-data";
 
 export const Route = createFileRoute("/journey")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    period: (search["period"] as string) || undefined,
+    scale: (search["scale"] as "year" | "month" | "day") || undefined,
+    kind: (search["kind"] as MomentKind | "all") || undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Journey — LIFE//TRACE" },
@@ -42,8 +47,12 @@ export const Route = createFileRoute("/journey")({
 });
 
 function JourneyPage() {
-  const [scale, setScale] = useState<"year" | "month" | "day">("month");
-  const [kind, setKind] = useState<MomentKind | "all">("all");
+  const search = Route.useSearch();
+  const periodParam = search.period;
+  const [scale, setScale] = useState<"year" | "month" | "day">(
+    search.scale || (periodParam && periodParam.length === 4 ? "year" : "month")
+  );
+  const [kind, setKind] = useState<MomentKind | "all">(search.kind || "all");
   const [moments, setMoments] = useState<LifeMoment[]>(initialMoments);
   const [selectedTraceMoment, setSelectedTraceMoment] = useState<LifeMoment | null>(null);
 
@@ -90,18 +99,30 @@ function JourneyPage() {
   // Default active index: choose 2017 or a dense month
   const defaultIndex = useMemo(() => {
     if (!points.length) return 0;
+    if (periodParam) {
+      const pIdx = points.findIndex((p) => p.key === periodParam || p.key.startsWith(periodParam));
+      if (pIdx >= 0) return pIdx;
+    }
     const peakIdx = points.findIndex((p) => p.key.includes("2017-08") || p.key === "2017");
     return peakIdx >= 0 ? peakIdx : Math.min(10, points.length - 1);
-  }, [points]);
+  }, [points, periodParam]);
 
   const [activeIndex, setActiveIndex] = useState(defaultIndex);
 
+  // Sync activeIndex if periodParam changes
+  useEffect(() => {
+    if (periodParam && points.length > 0) {
+      const pIdx = points.findIndex((p) => p.key === periodParam || p.key.startsWith(periodParam));
+      if (pIdx >= 0) setActiveIndex(pIdx);
+    }
+  }, [periodParam, points]);
+
   const activePoint = points[Math.min(activeIndex, Math.max(points.length - 1, 0))];
 
-  // Calculate real period summary & factual narrative
+  // Calculate real period summary & factual narrative using true aggregate counts
   const periodSummary = useMemo(() => {
     if (!activePoint) return null;
-    return generatePeriodSummary(activePoint.key, moments);
+    return generatePeriodSummary(activePoint.key, moments, activePoint);
   }, [activePoint, moments]);
 
   const maxCount = Math.max(...points.map((p) => p.count), 1);
@@ -289,7 +310,7 @@ function JourneyPage() {
               <div className="mt-8">
                 <div className="flex items-center justify-between border-b border-border pb-2">
                   <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                    Representative Moments
+                    Representative Moments ({Math.min(6, activePoint?.moments.length ?? 0)} shown of {activePoint?.count.toLocaleString()} total in passage)
                   </div>
                   <span className="font-mono text-[9px] text-muted-foreground">Click to Trace</span>
                 </div>
@@ -332,6 +353,21 @@ function JourneyPage() {
                       </div>
                     </button>
                   ))}
+                </div>
+
+                <div className="mt-4 border-t border-dashed border-border pt-3">
+                  <Button variant="ghost" size="sm" asChild className="w-full justify-between font-mono text-xs">
+                    <Link
+                      to="/moments"
+                      search={{
+                        startDate: activePoint?.key.length === 4 ? `${activePoint.key}-01-01` : `${activePoint?.key}-01`,
+                        endDate: activePoint?.key.length === 4 ? `${activePoint.key}-12-31` : `${activePoint?.key}-31`,
+                      } as any}
+                    >
+                      <span>Explore all {activePoint?.count.toLocaleString()} in Moments</span>
+                      <ArrowRight className="size-3.5" />
+                    </Link>
+                  </Button>
                 </div>
               </div>
             </aside>

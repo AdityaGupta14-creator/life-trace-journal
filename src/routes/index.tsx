@@ -105,21 +105,24 @@ function DiscoverPage() {
         </div>
 
         {/* Dataset Scale Indicator */}
-        <div className="mt-14 grid grid-cols-2 border-y border-border md:mt-20 md:w-2/3 lg:w-1/2">
+        <div className="mt-14 grid grid-cols-2 border-y border-border md:mt-20 md:w-3/4 lg:w-2/3">
           <div className="py-6 pr-6">
             <div className="font-display text-4xl md:text-6xl">{datasetScale.music.toLocaleString()}</div>
             <div className="mt-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
               <Music2 className="size-3 text-dusty-blue" />
-              <span>Music moments (Spotify History)</span>
+              <span>Music moments (Spotify 2013—2024)</span>
             </div>
           </div>
           <div className="border-l border-border py-6 pl-6">
             <div className="font-display text-4xl md:text-6xl">{datasetScale.transactions.toLocaleString()}</div>
             <div className="mt-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
               <ReceiptText className="size-3 text-ochre" />
-              <span>Daily household receipts</span>
+              <span>Financial receipts ({datasetScale.householdTransactions.toLocaleString()} household + {datasetScale.indiaTransactions.toLocaleString()} card)</span>
             </div>
           </div>
+        </div>
+        <div className="mt-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Total Archive: {datasetScale.total.toLocaleString()} recorded moments across 11 calendar years
         </div>
 
         {/* Archival Progression Cue */}

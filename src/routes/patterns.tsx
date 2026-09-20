@@ -292,7 +292,31 @@ function PatternsPage() {
 
             <div className="mt-8 border-t border-border pt-4 text-right">
               <Button variant="outline" asChild size="sm">
-                <Link to="/moments">Explore all underlying records in Moments →</Link>
+                <Link
+                  to="/moments"
+                  search={{
+                    filter:
+                      selectedPattern.group === "Listening patterns"
+                        ? "Music"
+                        : selectedPattern.group === "Transaction patterns"
+                        ? "Food"
+                        : "All",
+                    query:
+                      selectedPattern.group === "Listening patterns"
+                        ? "Beatles"
+                        : "",
+                    startDate:
+                      selectedPattern.group === "Cross-data connections"
+                        ? "2015-01-01"
+                        : undefined,
+                    endDate:
+                      selectedPattern.group === "Cross-data connections"
+                        ? "2018-09-20"
+                        : undefined,
+                  } as any}
+                >
+                  Explore matching records in Moments →
+                </Link>
               </Button>
             </div>
           </aside>

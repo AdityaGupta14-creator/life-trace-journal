@@ -30,6 +30,12 @@ export const Route = createFileRoute("/moments")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    query: (search["query"] as string) || undefined,
+    filter: (search["filter"] as (typeof filters)[number]) || undefined,
+    startDate: (search["startDate"] as string) || undefined,
+    endDate: (search["endDate"] as string) || undefined,
+  }),
   component: MomentsPage,
 });
 
@@ -48,16 +54,25 @@ const filters: (MomentCategory | "All" | "Transactions")[] = [
 const PAGE_SIZE = 24;
 
 function MomentsPage() {
+  const search = Route.useSearch();
   const [allMoments, setAllMoments] = useState<LifeMoment[]>(initialMoments);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<(typeof filters)[number]>("All");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [query, setQuery] = useState(search.query || "");
+  const [filter, setFilter] = useState<(typeof filters)[number]>(search.filter || "All");
+  const [startDate, setStartDate] = useState(search.startDate || "");
+  const [endDate, setEndDate] = useState(search.endDate || "");
   const [ascending, setAscending] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMoment, setSelectedMoment] = useState<LifeMoment | null>(null);
 
-  // Background fetch full moments dataset (all 2,461 transactions + representative music)
+  // Sync state if search params change
+  useEffect(() => {
+    if (search.query !== undefined) setQuery(search.query);
+    if (search.filter !== undefined) setFilter(search.filter);
+    if (search.startDate !== undefined) setStartDate(search.startDate);
+    if (search.endDate !== undefined) setEndDate(search.endDate);
+  }, [search.query, search.filter, search.startDate, search.endDate]);
+
+  // Background fetch full moments dataset (all 11,878 transactions + representative music)
   useEffect(() => {
     fetchAllMoments().then((data) => {
       setAllMoments(data);
