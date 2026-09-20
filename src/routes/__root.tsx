@@ -77,7 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "LIFE//TRACE" },
       { name: "description", content: "LIFE//TRACE turns digital records into an explorable archive of patterns, connections, and stories." },
       { name: "author", content: "LIFE//TRACE" },
       { property: "og:title", content: "LIFE//TRACE" },

@@ -71,7 +71,7 @@ export function generateChapters(moments: LifeMoment[]): Chapter[] {
     const transactions = period.transactions;
     const late = period.moments.filter((m) => new Date(m.occurredAt).getUTCHours() < 2).length;
     const titles = late >= 2 ? ["The Night Shift", "After Hours"] : transactions > music / 2 ? ["The Errand Days", "Out in the World"] : ["The Return", "A Listening Season"];
-    return { id: period.key, title: titles[index % 2], range: period.label, description: `${period.count} traces form a small chapter: ${music} listening moments and ${transactions} receipts${late ? `, including ${late} after midnight` : ""}.`, stats: [`${music} songs`, `${transactions} receipts`, `${period.count} total traces`], moments: period.moments };
+    return { id: period.key, title: titles[index % 2] ?? "A Recorded Passage", range: period.label, description: `${period.count} traces form a small chapter: ${music} listening moments and ${transactions} receipts${late ? `, including ${late} after midnight` : ""}.`, stats: [`${music} songs`, `${transactions} receipts`, `${period.count} total traces`], moments: period.moments };
   });
 }
 
