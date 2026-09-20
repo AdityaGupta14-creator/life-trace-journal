@@ -1,7 +1,8 @@
-# LIFE//TRACE build
+# LIFE//TRACE depth pass
 
-- [x] Create typed sample-data adapter and analysis utilities
-- [x] Build shared editorial shell and interactive visual language
-- [x] Build Discover, Journey, Patterns, and Moments experiences
-- [x] Add meaningful empty/loading/error states, keyboard discovery, and explicit evidence/correlation language
-- [x] Verify build and responsive interactions
+- [ ] Make the Life Field period-aware, explorable, and lightweight
+- [ ] Build reusable Follow the Trace interaction with evidence and time distance
+- [ ] Deepen Journey with generated period passages and trace access
+- [ ] Turn Patterns into evidence-backed, openable findings
+- [ ] Add Moments date filtering and paginated raw-record exploration
+- [ ] Add archive progression and complete responsive/accessibility verification
